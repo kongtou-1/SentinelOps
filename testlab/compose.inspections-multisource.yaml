@@ -1,0 +1,24 @@
+name: sentinelops-inspection-multisource
+services:
+  source:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "/lab/inspection_source.py"]
+    volumes:
+      - ./inspection_source.py:/lab/inspection_source.py:ro
+      - ../.local/testlab/inspection-multisource:/samples:ro
+    read_only: true
+    mem_limit: 96m
+    cpus: 0.25
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      platform:
+        aliases: [inspection-multisource-api]
+networks:
+  platform:
+    external: true
+    name: sentinelops_default

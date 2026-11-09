@@ -1,0 +1,599 @@
+[
+  {
+    "path": "/askdata",
+    "redirect": "/askdata/chat"
+  },
+  {
+    "path": "/askdata/chat",
+    "meta": {
+      "title": "问数对话",
+      "permission": "askdata:read"
+    }
+  },
+  {
+    "path": "/askdata/settings",
+    "meta": {
+      "title": "问数设置",
+      "permission": "askdata:read"
+    }
+  },
+  {
+    "path": "/askdata/catalog",
+    "meta": {
+      "title": "数据目录",
+      "permission": "askdata:read"
+    }
+  },
+  {
+    "path": "/askdata/models",
+    "meta": {
+      "title": "业务模型",
+      "permission": "askdata:read"
+    }
+  },
+  {
+    "path": "/askdata/analyses",
+    "meta": {
+      "title": "分析库",
+      "permission": "askdata:read"
+    }
+  },
+  {
+    "path": "/askdata/statistics",
+    "meta": {
+      "title": "使用统计",
+      "permission": "askdata:manage"
+    }
+  },
+  {
+    "path": "/recycle-bin",
+    "meta": {
+      "title": "回收站",
+      "permission": "profile:read"
+    }
+  },
+  {
+    "path": "/agent-configs",
+    "meta": {
+      "title": "Agent 配置",
+      "permission": "system:read"
+    }
+  },
+  {
+    "path": "/access",
+    "meta": {
+      "title": "我的权限",
+      "permission": "profile:read"
+    }
+  },
+  {
+    "path": "/inspections/runs",
+    "redirect": "/inspections"
+  },
+  {
+    "path": "/inspections/plans/new",
+    "meta": {
+      "title": "配置巡检任务",
+      "permission": "inspections:manage"
+    }
+  },
+  {
+    "path": "/inspections/plans/:planId/edit",
+    "meta": {
+      "title": "配置巡检任务",
+      "permission": "inspections:manage"
+    }
+  },
+  {
+    "path": "/inspections",
+    "meta": {
+      "title": "巡检任务",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/services/:serviceId",
+    "meta": {
+      "title": "巡检任务",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/plans/:planId/runs",
+    "meta": {
+      "title": "本任务巡检记录",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/runs/:id",
+    "meta": {
+      "title": "巡检结果",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/plans",
+    "meta": {
+      "title": "巡检任务",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/plans/:planId",
+    "meta": {
+      "title": "巡检任务详情",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/inspections/sources",
+    "meta": {
+      "title": "数据源管理",
+      "permission": "inspections:read"
+    }
+  },
+  {
+    "path": "/data-governance",
+    "meta": {
+      "title": "数据管理",
+      "permission": "system:read"
+    }
+  },
+  {
+    "path": "/improvements",
+    "meta": {
+      "title": "复盘整改",
+      "permission": "reports:read"
+    }
+  },
+  {
+    "path": "/knowledge-validity",
+    "meta": {
+      "title": "知识有效期",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/evaluations",
+    "meta": {
+      "title": "效果评价",
+      "permission": "analyses:read"
+    }
+  },
+  {
+    "path": "/notifications",
+    "meta": {
+      "title": "我的待办",
+      "permission": "profile:read"
+    }
+  },
+  {
+    "path": "/notification-settings",
+    "meta": {
+      "title": "通知与维护",
+      "permission": "system:read"
+    }
+  },
+  {
+    "path": "/project-intro",
+    "meta": {
+      "title": "项目介绍",
+      "permission": "resources:read",
+      "introduction": true
+    }
+  },
+  {
+    "path": "/discover",
+    "redirect": "/discover/skills"
+  },
+  {
+    "path": "/discover/skills",
+    "props": {
+      "kind": "skill"
+    },
+    "meta": {
+      "title": "Skill 市场",
+      "permission": "market:read",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/tools",
+    "props": {
+      "kind": "tool"
+    },
+    "meta": {
+      "title": "实用工具",
+      "permission": "market:read",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/mine",
+    "meta": {
+      "title": "我的提交",
+      "permission": "market:submit",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/manage",
+    "props": {
+      "manage": true
+    },
+    "meta": {
+      "title": "内容管理",
+      "permission": "market:review",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/items/new",
+    "meta": {
+      "title": "提交内容",
+      "permission": "market:submit",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/items/:id/edit",
+    "meta": {
+      "title": "提交内容",
+      "permission": "market:submit",
+      "discover": true
+    }
+  },
+  {
+    "path": "/discover/items/:id",
+    "meta": {
+      "title": "内容详情",
+      "permission": "market:read",
+      "discover": true
+    }
+  },
+  {
+    "path": "/login",
+    "meta": {
+      "title": "登录"
+    }
+  },
+  {
+    "path": "/",
+    "meta": {
+      "title": "总览",
+      "permission": "dashboards:read"
+    }
+  },
+  {
+    "path": "/servers",
+    "props": {
+      "kind": "servers"
+    },
+    "meta": {
+      "title": "服务器",
+      "permission": "servers:read"
+    }
+  },
+  {
+    "path": "/containers",
+    "props": {
+      "kind": "containers"
+    },
+    "meta": {
+      "title": "Docker 容器",
+      "permission": "containers:read"
+    }
+  },
+  {
+    "path": "/llm-endpoints",
+    "props": {
+      "kind": "llm-endpoints"
+    },
+    "meta": {
+      "title": "LLM 服务",
+      "permission": "llm:read"
+    }
+  },
+  {
+    "path": "/prediction-tasks",
+    "props": {
+      "kind": "prediction-tasks"
+    },
+    "meta": {
+      "title": "预测任务",
+      "permission": "predictions:read"
+    }
+  },
+  {
+    "path": "/predictions",
+    "props": {
+      "kind": "predictions"
+    },
+    "meta": {
+      "title": "预测结果",
+      "permission": "predictions:read"
+    }
+  },
+  {
+    "path": "/alerts",
+    "props": {
+      "kind": "alerts"
+    },
+    "meta": {
+      "title": "告警事件",
+      "permission": "alerts:read"
+    }
+  },
+  {
+    "path": "/alert-rules",
+    "props": {
+      "kind": "alert-rules"
+    },
+    "meta": {
+      "title": "告警规则",
+      "permission": "alerts:read"
+    }
+  },
+  {
+    "path": "/incidents",
+    "props": {
+      "kind": "incidents"
+    },
+    "meta": {
+      "title": "事故中心",
+      "permission": "incidents:read"
+    }
+  },
+  {
+    "path": "/approvals",
+    "props": {
+      "kind": "approvals"
+    },
+    "meta": {
+      "title": "审批列表",
+      "permission": "executions:read"
+    }
+  },
+  {
+    "path": "/executions",
+    "props": {
+      "kind": "executions"
+    },
+    "meta": {
+      "title": "动作执行记录",
+      "permission": "executions:read"
+    }
+  },
+  {
+    "path": "/reports",
+    "props": {
+      "kind": "reports"
+    },
+    "meta": {
+      "title": "复盘报告",
+      "permission": "reports:read"
+    }
+  },
+  {
+    "path": "/knowledge",
+    "props": {
+      "kind": "knowledge"
+    },
+    "meta": {
+      "title": "知识文档",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/skills",
+    "props": {
+      "kind": "skills"
+    },
+    "meta": {
+      "title": "Skill",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/users",
+    "props": {
+      "kind": "users"
+    },
+    "meta": {
+      "title": "用户管理",
+      "permission": "users:manage"
+    }
+  },
+  {
+    "path": "/ssh-credentials",
+    "props": {
+      "kind": "ssh-credentials"
+    },
+    "meta": {
+      "title": "SSH 凭据",
+      "permission": "credentials:manage"
+    }
+  },
+  {
+    "path": "/audit-logs",
+    "props": {
+      "kind": "audit-logs"
+    },
+    "meta": {
+      "title": "审计日志",
+      "permission": "audit:read"
+    }
+  },
+  {
+    "path": "/applications",
+    "meta": {
+      "title": "应用与服务",
+      "permission": "sources:read"
+    }
+  },
+  {
+    "path": "/applications/:id",
+    "meta": {
+      "title": "应用与服务",
+      "permission": "sources:read"
+    }
+  },
+  {
+    "path": "/knowledge/search",
+    "props": {
+      "kind": "knowledge"
+    },
+    "meta": {
+      "title": "知识检索",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/servers/:id",
+    "props": {
+      "kind": "servers"
+    },
+    "meta": {
+      "title": "资源详情",
+      "permission": "servers:read"
+    }
+  },
+  {
+    "path": "/containers/:id",
+    "props": {
+      "kind": "containers"
+    },
+    "meta": {
+      "title": "资源详情",
+      "permission": "containers:read"
+    }
+  },
+  {
+    "path": "/llm-endpoints/:id",
+    "props": {
+      "kind": "llm-endpoints"
+    },
+    "meta": {
+      "title": "资源详情",
+      "permission": "llm:read"
+    }
+  },
+  {
+    "path": "/incidents/:id/diagnosis",
+    "meta": {
+      "title": "AI 诊断工作台",
+      "permission": "analyses:run"
+    }
+  },
+  {
+    "path": "/incidents/:id",
+    "meta": {
+      "title": "事故详情",
+      "permission": "incidents:read"
+    }
+  },
+  {
+    "path": "/alerts/:id",
+    "meta": {
+      "title": "告警详情",
+      "permission": "alerts:read"
+    }
+  },
+  {
+    "path": "/predictions/:id",
+    "meta": {
+      "title": "预测详情",
+      "permission": "predictions:read"
+    }
+  },
+  {
+    "path": "/prediction-tasks/:id",
+    "meta": {
+      "title": "预测任务详情",
+      "permission": "predictions:read"
+    }
+  },
+  {
+    "path": "/approvals/:id",
+    "props": {
+      "kind": "approvals"
+    },
+    "meta": {
+      "title": "审批详情",
+      "permission": "executions:read"
+    }
+  },
+  {
+    "path": "/executions/:id",
+    "props": {
+      "kind": "executions"
+    },
+    "meta": {
+      "title": "执行详情",
+      "permission": "executions:read"
+    }
+  },
+  {
+    "path": "/reports/:id",
+    "meta": {
+      "title": "复盘报告详情",
+      "permission": "reports:read"
+    }
+  },
+  {
+    "path": "/knowledge/:id",
+    "props": {
+      "kind": "knowledge"
+    },
+    "meta": {
+      "title": "知识文档",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/skills/:id",
+    "props": {
+      "kind": "skills"
+    },
+    "meta": {
+      "title": "Skill",
+      "permission": "knowledge:read"
+    }
+  },
+  {
+    "path": "/action-skills",
+    "meta": {
+      "title": "执行动作目录",
+      "permission": "executions:read"
+    }
+  },
+  {
+    "path": "/roles",
+    "meta": {
+      "title": "角色与权限",
+      "permission": "roles:read"
+    }
+  },
+  {
+    "path": "/system",
+    "meta": {
+      "title": "系统状态",
+      "permission": "system:read"
+    }
+  },
+  {
+    "path": "/forbidden",
+    "props": {
+      "title": "无访问权限",
+      "description": "当前账号不能访问此页面，可返回总览。"
+    }
+  },
+  {
+    "path": "/:pathMatch(.*)*",
+    "props": {
+      "title": "页面不存在",
+      "description": "请从左侧菜单选择页面。"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+from fastapi import APIRouter
+
+from app.api.routes import (
+    access,
+    agent_config,
+    agent_results,
+    alerts,
+    analyses,
+    askdata,
+    auth,
+    business_services,
+    console,
+    conversations,
+    evaluation,
+    executions,
+    governance,
+    improvements,
+    incidents,
+    inspections,
+    knowledge,
+    llm,
+    llm_bindings,
+    market,
+    notifications,
+    operations,
+    platform,
+    predictions,
+    recycle_bin,
+    repairs,
+    reports,
+    resources,
+    service_databases,
+    service_monitors,
+    sources,
+    system,
+)
+
+router = APIRouter()
+router.include_router(askdata.router)
+router.include_router(access.router)
+router.include_router(agent_config.router)
+router.include_router(agent_results.router)
+router.include_router(auth.router)
+router.include_router(resources.router)
+router.include_router(business_services.router)
+router.include_router(service_monitors.router)
+router.include_router(service_databases.router)
+router.include_router(alerts.router)
+router.include_router(llm.router)
+router.include_router(llm_bindings.router)
+router.include_router(predictions.router)
+router.include_router(incidents.router)
+router.include_router(inspections.router)
+router.include_router(analyses.router)
+router.include_router(conversations.router)
+router.include_router(knowledge.router)
+router.include_router(executions.router)
+router.include_router(reports.router)
+router.include_router(console.router)
+router.include_router(sources.router)
+router.include_router(repairs.router)
+router.include_router(market.router)
+router.include_router(system.router)
+router.include_router(operations.router)
+router.include_router(notifications.router)
+router.include_router(evaluation.router)
+router.include_router(improvements.router)
+router.include_router(platform.router)
+router.include_router(governance.router)
+router.include_router(recycle_bin.router)

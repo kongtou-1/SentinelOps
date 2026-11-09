@@ -1,0 +1,19 @@
+{
+  "enabled": false,
+  "interval_seconds": 60,
+  "targets": [
+    {"name": "api", "url": "http://127.0.0.1:8000/health/live"},
+    {"name": "database-readiness", "url": "http://127.0.0.1:8000/health/ready"},
+    {"name": "prometheus", "url": "http://127.0.0.1:9090/-/ready"},
+    {"name": "alertmanager", "url": "http://127.0.0.1:9093/-/ready"}
+  ],
+  "smtp": {
+    "host": "127.0.0.1",
+    "port": 1025,
+    "sender": "watchdog@example.test",
+    "recipients": ["operator@example.test"],
+    "starttls": false,
+    "username": "",
+    "password_file": ""
+  }
+}

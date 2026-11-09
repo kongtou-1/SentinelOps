@@ -1,0 +1,21 @@
+services:
+  test-ssh:
+    build: ./backend/tests/execution_ssh
+    image: sentinelops-execution-ssh:local
+    volumes:
+      - ./.local/execution-fixture:/fixtures:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: "no"
+  test-worker-action:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "-m", "http.server", "8004"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+    restart: "no"
+  test-action-guard:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "-c", "import time; time.sleep(86400)"]
+    restart: "no"

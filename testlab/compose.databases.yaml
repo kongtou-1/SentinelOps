@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
+    environment:
+      POSTGRES_DB: ops_databases_test
+      POSTGRES_USER: db_test
+      POSTGRES_PASSWORD: ${DATABASE_ACCEPTANCE_PASSWORD:?}
+    ports:
+      - "127.0.0.1:15483:5432"
+    volumes:
+      - ../.local/database-acceptance-tls:/tls:ro
+    entrypoint: ["bash", "-c"]
+    command:
+      - >-
+        cp /tls/server.key /tmp/database-server.key &&
+        chown postgres:postgres /tmp/database-server.key &&
+        chmod 600 /tmp/database-server.key &&
+        exec /usr/local/bin/docker-entrypoint.sh postgres
+        -c ssl=on -c ssl_cert_file=/tls/server.crt -c ssl_key_file=/tmp/database-server.key
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U db_test -d ops_databases_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DATABASE_ACCEPTANCE_PASSWORD:?}
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: business_test
+    ports:
+      - "127.0.0.1:13386:3306"
+    volumes:
+      - ../.local/database-acceptance-tls:/tls:ro
+    command: ["--ssl-ca=/tls/ca.crt", "--ssl-cert=/tls/server.crt", "--ssl-key=/tls/server.key"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --protocol=tcp -h 127.0.0.1 --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 60

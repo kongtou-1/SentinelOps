@@ -1,0 +1,22 @@
+# Disposable Prometheus history and worker used only by accept_predictions.py.
+services:
+  prediction-fixture:
+    image: quay.io/prometheus/prometheus:v3.5.0
+    profiles: [prediction-test]
+    user: "0:0"
+    command: ["--config.file=/fixtures/prometheus.yml", "--storage.tsdb.path=/fixtures/data", "--storage.tsdb.retention.time=35d"]
+    volumes: ["${PREDICTION_FIXTURE_DIR:?Run accept_predictions.py}:/fixtures"]
+    ports: ["127.0.0.1:19090:9090"]
+
+  prediction-fixture-worker:
+    image: sentinelops-backend:local
+    profiles: [prediction-test]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PROMETHEUS_URL: http://prediction-fixture:9090
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+    command: ["/app/.venv/bin/python", "-m", "app.workers.predictions"]
+    depends_on: [prediction-fixture]

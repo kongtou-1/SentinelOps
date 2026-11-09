@@ -1,0 +1,28 @@
+services:
+  backend:
+    environment:
+      AI_ENABLED: "true"
+      AI_BASE_URL: http://test-diagnosis:8003
+      AI_MODEL: deepseek-v4-flash
+      AI_TIMEOUT_SECONDS: "30"
+  ai-worker:
+    environment:
+      AI_ENABLED: "true"
+      AI_BASE_URL: http://test-diagnosis:8003
+      AI_MODEL: deepseek-v4-flash
+      AI_TIMEOUT_SECONDS: "30"
+  test-diagnosis:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "/mock_diagnosis.py"]
+    volumes: ["./backend/scripts/mock_diagnosis.py:/mock_diagnosis.py:ro"]
+    ports: ["127.0.0.1:18003:8003"]
+  report-worker:
+    environment:
+      AI_ENABLED: "true"
+      AI_BASE_URL: http://test-diagnosis:8003
+      AI_MODEL: deepseek-v4-flash
+      AI_TIMEOUT_SECONDS: "30"
+      SMTP_ADDRESS: mailpit:1025
+      SMTP_FROM: reports@example.test
+      SMTP_REQUIRE_TLS: "false"
+      SMTP_USERNAME: ""

@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+logs
+tests
+scripts/*
+!scripts/prepare_volumes.py
+!scripts/seed_knowledge.py

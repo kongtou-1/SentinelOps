@@ -1,0 +1,194 @@
+# Compatibility layout for older isolated acceptance scripts; not the normal deployment.
+services:
+  migrate:
+    profiles: [monitoring, ai, reports, sources, inspections, execution]
+  prepare-volumes:
+    profiles: [monitoring, ai, reports, sources, inspections, execution]
+  backend:
+    command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+  operations-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [monitoring, inspections]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PROMETHEUS_URL: http://prometheus:9090
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      SOURCE_STORE_DIR: /var/lib/platform-sources
+      ARCHIVE_DIR: /var/lib/platform-archives
+    volumes:
+      - backend_secrets:/run/secrets:ro
+      - source_store:/var/lib/platform-sources
+      - archives:/var/lib/platform-archives
+    command: ["/app/.venv/bin/python", "-m", "app.workers.operations"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prepare-volumes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/operations-worker.heartbeat').read_text()) < 150"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  prediction-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [monitoring]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PROMETHEUS_URL: http://prometheus:9090
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+    command: ["/app/.venv/bin/python", "-m", "app.workers.predictions"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/prediction-worker.heartbeat').read_text()) < 150"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  source-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [sources]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      SOURCE_STORE_DIR: /var/lib/platform-sources
+      SOURCE_INPUT_DIR: /source-input
+    command: ["/app/.venv/bin/python", "-m", "app.workers.sources"]
+    volumes:
+      - backend_secrets:/run/secrets:ro
+      - source_store:/var/lib/platform-sources
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prepare-volumes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import os,time,pathlib; assert time.time()-float(pathlib.Path('/tmp/source-worker.heartbeat').read_text()) < max(180,int(os.environ.get('SOURCE_SYNC_TIMEOUT_SECONDS','120'))+30)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  inspection-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [inspections]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_KEY_FILE: /run/secrets/deepseek_key
+    volumes:
+      - backend_secrets:/run/secrets:ro
+    command: ["/app/.venv/bin/python", "-m", "app.workers.inspections"]
+    depends_on:
+      operations-worker:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prepare-volumes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/inspection-worker.heartbeat').read_text()) < 150"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  ai-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [ai]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PROMETHEUS_URL: http://prometheus:9090
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_KEY_FILE: /run/secrets/deepseek_key
+      EMBEDDING_MODEL_DIR: /opt/embedding-model
+      SOURCE_STORE_DIR: /var/lib/platform-sources
+    volumes:
+      - backend_secrets:/run/secrets:ro
+      - ./.local/embedding-model:/opt/embedding-model:ro
+      - source_store:/var/lib/platform-sources:ro
+    command: ["/app/.venv/bin/python", "-m", "app.workers.ai"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prepare-volumes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/ai-worker.heartbeat').read_text()) < 210"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  report-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [reports]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_KEY_FILE: /run/secrets/deepseek_key
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    volumes:
+      - backend_secrets:/run/secrets:ro
+    command: ["/app/.venv/bin/python", "-m", "app.workers.reports"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      prepare-volumes:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/report-worker.heartbeat').read_text()) < 240"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+

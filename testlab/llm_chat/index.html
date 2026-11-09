@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM 对话测试</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7fa; color: #1f2937; font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 64px auto; padding: 32px; background: white; border-radius: 16px; }
+    h1 { margin: 0 0 28px; font-size: 26px; }
+    label, h2 { display: block; margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+    textarea { width: 100%; min-height: 140px; resize: vertical; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+    textarea:focus { outline: 2px solid #93c5fd; border-color: #2563eb; }
+    button { margin: 16px 0 28px; padding: 10px 26px; border: 0; border-radius: 8px; background: #2563eb; color: white; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #answer { min-height: 100px; padding: 16px; background: #f8fafc; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #answer[data-error="true"] { color: #b91c1c; background: #fef2f2; }
+    @media (max-width: 600px) { main { margin: 20px 12px; padding: 24px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>LLM 对话测试</h1>
+    <form id="chat">
+      <label for="question">问题</label>
+      <textarea id="question" placeholder="请输入问题" maxlength="2000" required></textarea>
+      <button id="send" type="submit">发送</button>
+    </form>
+    <h2>回答</h2>
+    <div id="answer" role="status" aria-live="polite">等待提问</div>
+  </main>
+  <script>
+    const form = document.getElementById('chat');
+    const question = document.getElementById('question');
+    const send = document.getElementById('send');
+    const answer = document.getElementById('answer');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!question.value.trim()) { question.focus(); return; }
+      send.disabled = true;
+      send.textContent = '回答中…';
+      answer.dataset.error = 'false';
+      answer.textContent = '正在等待模型回答…';
+      try {
+        const response = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: question.value.trim() })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : '请求失败，请检查问题后重试');
+        answer.textContent = result.answer;
+      } catch (error) {
+        answer.dataset.error = 'true';
+        answer.textContent = error.message || '连接失败，请重试';
+      } finally {
+        send.disabled = false;
+        send.textContent = '发送';
+      }
+    });
+  </script>
+</body>
+</html>

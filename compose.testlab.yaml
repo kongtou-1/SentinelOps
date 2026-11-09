@@ -1,0 +1,67 @@
+name: sentinelops-testlab
+services:
+  business:
+    image: sentinelops-testlab-business:metrics-20261018
+    build: ./testlab/service
+    env_file: ./.local/testlab/runtime.env
+    command: ["/app/.venv/bin/python", "-u", "/lab/service.py"]
+    ports: ["127.0.0.1:18080:8080"]
+    volumes:
+      - ./.local/testlab/state:/state
+      - ./.local/testlab/provider.key:/run/secrets/provider_key:ro
+      - ./.local/testlab/gateway.key:/run/secrets/gateway_key:ro
+    mem_limit: 256m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      platform:
+        aliases: [testlab-business]
+
+  traffic:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "-u", "/lab/loadgen.py"]
+    volumes:
+      - ./testlab/loadgen.py:/lab/loadgen.py:ro
+      - ./.local/testlab/state:/state
+    mem_limit: 96m
+    cpus: 0.25
+    restart: unless-stopped
+    depends_on:
+      business:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import time,pathlib; assert time.time()-pathlib.Path('/state/traffic-status.json').stat().st_mtime < 30"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    networks: [platform]
+
+  ssh:
+    image: sentinelops-execution-ssh:local
+    command: ["sh", "-c", "cp /fixtures/ssh_host_ed25519_key /tmp/testlab_host_key && chmod 600 /tmp/testlab_host_key && exec /usr/sbin/sshd -D -e -f /lab/sshd_config"]
+    ports: ["127.0.0.1:12222:2222"]
+    volumes:
+      - ./testlab/ssh:/lab:ro
+      - ./.local/testlab/ssh:/fixtures:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 128m
+    cpus: 0.25
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1',2222),2).close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      platform:
+        aliases: [testlab-ssh]
+
+networks:
+  platform:
+    external: true
+    name: sentinelops_default

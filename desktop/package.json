@@ -1,0 +1,54 @@
+{
+  "name": "sentinelops-desktop",
+  "version": "0.1.5",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "description": "SentinelOps desktop client",
+  "author": "SentinelOps",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "electron .",
+    "build": "corepack pnpm --dir ../frontend build:desktop && electron-builder --win nsis --x64",
+    "build:dir": "corepack pnpm --dir ../frontend build:desktop && electron-builder --win dir --x64",
+    "test": "node --test tests/network.test.mjs",
+    "smoke": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "playwright-core": "1.64.1"
+  },
+  "build": {
+    "appId": "com.sentinelops.desktop",
+    "productName": "SentinelOps",
+    "asar": true,
+    "directories": {
+      "output": "releases",
+      "buildResources": "resources"
+    },
+    "files": [
+      "src/**",
+      "dist/**",
+      "resources/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": "nsis",
+      "signAndEditExecutable": true
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "artifactName": "SentinelOps-${version}-x64-setup.exe",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

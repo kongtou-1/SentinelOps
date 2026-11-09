@@ -1,0 +1,27 @@
+name: ops-monitoring-enhancements-test
+services:
+  health-target:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "-u", "-c", "import time; print('health acceptance target ready'); time.sleep(86400)"]
+    healthcheck:
+      test: ["CMD-SHELL", "test ! -f /tmp/health-failure"]
+      interval: 2s
+      timeout: 1s
+      retries: 1
+    restart: "no"
+    networks: [platform]
+  collector:
+    image: sentinelops-docker-state:local
+    group_add: ["${DOCKER_SOCKET_GID:-0}"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    networks:
+      platform:
+        aliases: [monitoring-enhancements-collector]
+networks:
+  platform:
+    external: true
+    name: sentinelops_default

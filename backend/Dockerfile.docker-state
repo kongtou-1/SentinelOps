@@ -1,0 +1,6 @@
+FROM ghcr.io/astral-sh/uv:0.12.21-python3.12-trixie-slim
+WORKDIR /collector
+COPY app/integrations/docker_state.py ./collector.py
+USER 1000:1000
+EXPOSE 9400
+CMD ["python", "-u", "collector.py"]

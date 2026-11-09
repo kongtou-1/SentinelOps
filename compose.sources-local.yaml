@@ -1,0 +1,11 @@
+# Optional: enable only when SOURCE_INPUT_ROOT is an existing host directory.
+# Core services never depend on this bind mount.
+services:
+  backend:
+    volumes:
+      - type: bind
+        source: ${SOURCE_INPUT_ROOT:?Set SOURCE_INPUT_ROOT to an existing host directory}
+        target: /source-input
+        read_only: true
+        bind:
+          create_host_path: false

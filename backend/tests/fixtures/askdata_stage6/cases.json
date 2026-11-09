@@ -1,0 +1,1105 @@
+{
+  "format": "sentinelops.askdata.benchmark",
+  "version": 1,
+  "frozen_at": "2026-11-07",
+  "dataset": {
+    "schema": "orders(id, status, amount, is_deleted, deleted_at, created_at, paid_at, user_id)",
+    "reference": "users(id, name, region)",
+    "rows": 120,
+    "note": "冻结样例不依赖真实业务库；reference_sql 为人工确认口径，仅用于判定器自检与真实模型评分，不会被执行。"
+  },
+  "cases": [
+    {
+      "id": "basic-01",
+      "category": "basic",
+      "app": "none",
+      "question": "订单表一共有多少条订单？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "纯结构问题，不需要业务口径",
+        "signals": []
+      },
+      "reference_sql": "SELECT COUNT(*) AS total FROM orders"
+    },
+    {
+      "id": "basic-02",
+      "category": "basic",
+      "app": "none",
+      "question": "按订单状态分组统计每类状态有多少单",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "group by status"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "分组统计，不应用任何状态过滤",
+        "signals": []
+      },
+      "reference_sql": "SELECT status, COUNT(*) AS total FROM orders GROUP BY status"
+    },
+    {
+      "id": "basic-03",
+      "category": "basic",
+      "app": "none",
+      "question": "2026 年 1 月的订单数量是多少？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "created_at"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "时间范围问题，要求出现时间列与上下界",
+        "signals": []
+      },
+      "reference_sql": "SELECT COUNT(*) AS total FROM orders WHERE created_at >= '2026-01-01' AND created_at < '2026-02-01'"
+    },
+    {
+      "id": "basic-04",
+      "category": "basic",
+      "app": "none",
+      "question": "金额最高的 10 笔订单是哪几笔？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "order by amount desc"
+        ],
+        "sql_any": [
+          [
+            "limit 10"
+          ]
+        ],
+        "sql_none": [],
+        "notes": "排序取前 N 条",
+        "signals": []
+      },
+      "reference_sql": "SELECT id, amount FROM orders ORDER BY amount DESC LIMIT 10"
+    },
+    {
+      "id": "basic-05",
+      "category": "basic",
+      "app": "none",
+      "question": "每个用户下了多少订单？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders",
+          "users"
+        ],
+        "sql_all": [
+          "from orders",
+          "join users",
+          "group by"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "跨表关联统计",
+        "signals": []
+      },
+      "reference_sql": "SELECT u.id, u.name, COUNT(o.id) AS total FROM orders o JOIN users u ON u.id = o.user_id GROUP BY u.id, u.name"
+    },
+    {
+      "id": "basic-06",
+      "category": "basic",
+      "app": "none",
+      "question": "平均每笔订单金额是多少？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders"
+        ],
+        "sql_any": [
+          [
+            "avg("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "聚合函数选择",
+        "signals": []
+      },
+      "reference_sql": "SELECT AVG(amount) AS avg_amount FROM orders"
+    },
+    {
+      "id": "basic-07",
+      "category": "basic",
+      "app": "none",
+      "question": "订单状态一共有哪几种？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "distinct status"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "去重取值",
+        "signals": []
+      },
+      "reference_sql": "SELECT DISTINCT status FROM orders"
+    },
+    {
+      "id": "basic-08",
+      "category": "basic",
+      "app": "none",
+      "question": "最近 7 天每天的订单数量",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "date(created_at)",
+          "group by"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "按天截断后分组",
+        "signals": []
+      },
+      "reference_sql": "SELECT DATE(created_at) AS day, COUNT(*) AS total FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' GROUP BY DATE(created_at) ORDER BY day"
+    },
+    {
+      "id": "basic-09",
+      "category": "basic",
+      "app": "none",
+      "question": "有哪些用户一单都没下过？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "users",
+          "orders"
+        ],
+        "sql_all": [
+          "from users",
+          "left join orders",
+          "is null"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "反连接，不能写成内连接",
+        "signals": []
+      },
+      "reference_sql": "SELECT u.id, u.name FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL"
+    },
+    {
+      "id": "basic-10",
+      "category": "basic",
+      "app": "none",
+      "question": "各区域分别有多少订单？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders",
+          "users"
+        ],
+        "sql_all": [
+          "from orders",
+          "join users",
+          "u.region"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "维度来自 users.region",
+        "signals": []
+      },
+      "reference_sql": "SELECT u.region, COUNT(o.id) AS total FROM orders o JOIN users u ON u.id = o.user_id GROUP BY u.region"
+    },
+    {
+      "id": "basic-11",
+      "category": "basic",
+      "app": "none",
+      "question": "所有订单的金额合计是多少？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "sum(amount)"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "不加状态条件时按全量口径求和",
+        "signals": []
+      },
+      "reference_sql": "SELECT SUM(amount) AS total FROM orders"
+    },
+    {
+      "id": "basic-12",
+      "category": "basic",
+      "app": "none",
+      "question": "已取消的订单有多少？",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "status = 'cancelled'"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "select *"
+        ],
+        "notes": "用户显式指定状态，不能被默认口径覆盖",
+        "signals": []
+      },
+      "reference_sql": "SELECT COUNT(*) AS total FROM orders WHERE status = 'CANCELLED'"
+    },
+    {
+      "id": "python-a-01",
+      "category": "python",
+      "app": "a",
+      "question": "已支付订单的销售额是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/app/repositories/orders.py:33-48"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "status = 'paid'",
+          "is_deleted = 0"
+        ],
+        "sql_any": [
+          [
+            "/ 100",
+            "/100"
+          ]
+        ],
+        "sql_none": [
+          "deleted_at is null",
+          "status = 'settled'"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "PAID 状态 + is_deleted=0 + 金额分转元（÷100）",
+        "signals": [
+          "status:paid",
+          "soft_delete:flag",
+          "unit:cent"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) / 100 AS total_yuan FROM orders WHERE status = 'PAID' AND is_deleted = 0",
+      "wrong_sql": "SELECT SUM(amount) AS total FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL"
+    },
+    {
+      "id": "python-a-02",
+      "category": "python",
+      "app": "a",
+      "question": "一共有多少已支付订单？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/app/repositories/orders.py:33-40"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "status = 'paid'",
+          "is_deleted = 0"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "deleted_at is null",
+          "status = 'settled'"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "口径同 python-a-01，不含金额换算",
+        "signals": [
+          "status:paid",
+          "soft_delete:flag"
+        ]
+      },
+      "reference_sql": "SELECT COUNT(*) AS total FROM orders WHERE status = 'PAID' AND is_deleted = 0",
+      "wrong_sql": "SELECT COUNT(*) AS total FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL"
+    },
+    {
+      "id": "python-a-03",
+      "category": "python",
+      "app": "a",
+      "question": "上个月每天的营收是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/app/repositories/orders.py:43-48"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "created_at",
+          "status = 'paid'",
+          "is_deleted = 0",
+          "group by"
+        ],
+        "sql_any": [
+          [
+            "/ 100",
+            "/100"
+          ]
+        ],
+        "sql_none": [
+          "paid_at"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "报表时间口径为 created_at，不是 paid_at",
+        "signals": [
+          "time:created_at",
+          "status:paid",
+          "soft_delete:flag",
+          "unit:cent"
+        ]
+      },
+      "reference_sql": "SELECT DATE(created_at) AS day, SUM(amount) / 100 AS revenue FROM orders WHERE status = 'PAID' AND is_deleted = 0 AND created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < DATE_TRUNC('month', CURRENT_DATE) GROUP BY DATE(created_at) ORDER BY day",
+      "wrong_sql": "SELECT DATE(paid_at) AS day, SUM(amount) AS revenue FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL GROUP BY DATE(paid_at)"
+    },
+    {
+      "id": "python-a-04",
+      "category": "python",
+      "app": "a",
+      "question": "各状态订单的金额分别是多少，退款订单不算？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/app/repositories/orders.py:33-40"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "is_deleted = 0",
+          "group by status",
+          "refunded"
+        ],
+        "sql_any": [
+          [
+            "/ 100",
+            "/100"
+          ]
+        ],
+        "sql_none": [
+          "deleted_at is null"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "显式排除 REFUNDED，且软删除用 is_deleted",
+        "signals": [
+          "soft_delete:flag",
+          "exclude:refunded",
+          "unit:cent"
+        ]
+      },
+      "reference_sql": "SELECT status, SUM(amount) / 100 AS total FROM orders WHERE is_deleted = 0 AND status <> 'REFUNDED' GROUP BY status",
+      "wrong_sql": "SELECT status, SUM(amount) AS total FROM orders WHERE deleted_at IS NULL AND status <> 'REFUND' GROUP BY status"
+    },
+    {
+      "id": "python-a-05",
+      "category": "python",
+      "app": "a",
+      "question": "2026 年 1 月以来的营收是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/app/repositories/orders.py:43-48"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "created_at >= '2026-01-01'",
+          "status = 'paid'",
+          "is_deleted = 0"
+        ],
+        "sql_any": [
+          [
+            "/ 100",
+            "/100"
+          ]
+        ],
+        "sql_none": [
+          "paid_at"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "时间字段 + 状态 + 软删 + 单位四要素",
+        "signals": [
+          "time:created_at",
+          "status:paid",
+          "soft_delete:flag",
+          "unit:cent"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) / 100 AS total FROM orders WHERE status = 'PAID' AND is_deleted = 0 AND created_at >= '2026-01-01'",
+      "wrong_sql": "SELECT SUM(amount) AS total FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL AND paid_at >= '2026-01-01'"
+    },
+    {
+      "id": "python-b-01",
+      "category": "python",
+      "app": "b",
+      "question": "已结算订单的销售额是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/app/repositories/orders.py:34-49"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "status = 'settled'",
+          "deleted_at is null"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "is_deleted = 0",
+          "/ 100",
+          "status = 'paid'"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "SETTLED + deleted_at IS NULL + 金额已是元，不能再除 100",
+        "signals": [
+          "status:settled",
+          "soft_delete:null",
+          "unit:yuan"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) AS total_yuan FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL",
+      "wrong_sql": "SELECT SUM(amount) / 100 AS total_yuan FROM orders WHERE status = 'PAID' AND is_deleted = 0"
+    },
+    {
+      "id": "python-b-02",
+      "category": "python",
+      "app": "b",
+      "question": "一共有多少已结算订单？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/app/repositories/orders.py:34-41"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "from orders",
+          "status = 'settled'",
+          "deleted_at is null"
+        ],
+        "sql_any": [
+          [
+            "count("
+          ]
+        ],
+        "sql_none": [
+          "is_deleted = 0",
+          "status = 'paid'"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "同 python-b-01 的软删口径",
+        "signals": [
+          "status:settled",
+          "soft_delete:null"
+        ]
+      },
+      "reference_sql": "SELECT COUNT(*) AS total FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL",
+      "wrong_sql": "SELECT COUNT(*) AS total FROM orders WHERE status = 'PAID' AND is_deleted = 0"
+    },
+    {
+      "id": "python-b-03",
+      "category": "python",
+      "app": "b",
+      "question": "按支付月份统计已结算订单的营收",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/app/repositories/orders.py:44-49"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "paid_at",
+          "status = 'settled'",
+          "deleted_at is null",
+          "group by"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "created_at",
+          "/ 100"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "报表时间口径为 paid_at，金额不换算",
+        "signals": [
+          "time:paid_at",
+          "status:settled",
+          "soft_delete:null",
+          "unit:yuan"
+        ]
+      },
+      "reference_sql": "SELECT DATE_TRUNC('month', paid_at) AS month, SUM(amount) AS revenue FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL GROUP BY DATE_TRUNC('month', paid_at) ORDER BY month",
+      "wrong_sql": "SELECT DATE_TRUNC('month', created_at) AS month, SUM(amount) / 100 AS revenue FROM orders WHERE status = 'PAID' AND is_deleted = 0 GROUP BY DATE_TRUNC('month', created_at)"
+    },
+    {
+      "id": "python-b-04",
+      "category": "python",
+      "app": "b",
+      "question": "各状态订单的金额分别是多少，退款订单不算？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/app/repositories/orders.py:34-41"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "deleted_at is null",
+          "group by status",
+          "refund"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "is_deleted = 0"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "显式排除 REFUND，软删除用 deleted_at",
+        "signals": [
+          "soft_delete:null",
+          "exclude:refund",
+          "unit:yuan"
+        ]
+      },
+      "reference_sql": "SELECT status, SUM(amount) AS total FROM orders WHERE deleted_at IS NULL AND status <> 'REFUND' GROUP BY status",
+      "wrong_sql": "SELECT status, SUM(amount) / 100 AS total FROM orders WHERE is_deleted = 0 AND status <> 'REFUNDED' GROUP BY status"
+    },
+    {
+      "id": "python-b-05",
+      "category": "python",
+      "app": "b",
+      "question": "2026 年 1 月以来的营收是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/app/repositories/orders.py:44-49"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "paid_at >= '2026-01-01'",
+          "status = 'settled'",
+          "deleted_at is null"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "created_at",
+          "is_deleted = 0",
+          "/ 100"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "四个口径要素同时正确",
+        "signals": [
+          "time:paid_at",
+          "status:settled",
+          "soft_delete:null",
+          "unit:yuan"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) AS total FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL AND paid_at >= '2026-01-01'",
+      "wrong_sql": "SELECT SUM(amount) / 100 AS total FROM orders WHERE status = 'PAID' AND is_deleted = 0 AND created_at >= '2026-01-01'"
+    },
+    {
+      "id": "java-a-01",
+      "category": "java",
+      "app": "a",
+      "question": "按状态统计订单金额（原生报表口径）",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/src/main/java/com/example/orders/OrderRepository.java:22-24"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "is_deleted = 0",
+          "group by status"
+        ],
+        "sql_any": [
+          [
+            "sum(amount)"
+          ]
+        ],
+        "sql_none": [
+          "select *",
+          "deleted_at is null"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "MyBatis/JPA nativeQuery 中的软删条件",
+        "signals": [
+          "soft_delete:flag"
+        ]
+      },
+      "reference_sql": "SELECT status, SUM(amount) FROM orders WHERE is_deleted = 0 GROUP BY status",
+      "wrong_sql": "SELECT status, SUM(amount) FROM orders WHERE deleted_at IS NULL GROUP BY status"
+    },
+    {
+      "id": "java-a-02",
+      "category": "java",
+      "app": "a",
+      "question": "列出所有已支付订单",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/src/main/java/com/example/orders/OrderRepository.java:26-27"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "status = 'paid'",
+          "is_deleted = 0"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *",
+          "status = 'settled'"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "枚举常量来自 Java 侧定义",
+        "signals": [
+          "status:paid",
+          "soft_delete:flag"
+        ]
+      },
+      "reference_sql": "SELECT id, status, amount FROM orders WHERE status = 'PAID' AND is_deleted = 0",
+      "wrong_sql": "SELECT id, status, amount FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL"
+    },
+    {
+      "id": "java-a-03",
+      "category": "java",
+      "app": "a",
+      "question": "查询指定状态下未删除的订单",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/src/main/java/com/example/orders/OrderRepository.java:29"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "is_deleted = 0",
+          "status = :status"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "派生查询方法名中的 IsDeletedFalse",
+        "signals": [
+          "soft_delete:flag"
+        ]
+      },
+      "reference_sql": "SELECT id, status, amount FROM orders WHERE status = :status AND is_deleted = 0",
+      "wrong_sql": "SELECT id, status, amount FROM orders WHERE status = :status AND deleted_at IS NULL"
+    },
+    {
+      "id": "java-a-04",
+      "category": "java",
+      "app": "a",
+      "question": "营收是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_a/src/main/java/com/example/orders/OrderRepository.java:32-38"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "is_deleted = 0"
+        ],
+        "sql_any": [
+          [
+            "/ 100",
+            "/100"
+          ]
+        ],
+        "sql_none": [
+          "deleted_at is null"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "AMOUNT_UNIT=CENT 与 divide(100) 两处证据",
+        "signals": [
+          "soft_delete:flag",
+          "unit:cent"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) / 100 AS total FROM orders WHERE is_deleted = 0",
+      "wrong_sql": "SELECT SUM(amount) AS total FROM orders WHERE deleted_at IS NULL"
+    },
+    {
+      "id": "java-a-05",
+      "category": "java",
+      "app": "a",
+      "question": "按退款原因统计退款订单的数量",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "clarify",
+        "gap_terms": [
+          "退款原因",
+          "缺少",
+          "没有",
+          "不存在",
+          "无法确认",
+          "未提供"
+        ],
+        "sql_none": [
+          "refund_reason",
+          "refund_type"
+        ],
+        "notes": "schema 内没有退款原因字段，必须澄清或报告缺口，不得臆造列",
+        "signals": []
+      },
+      "reference_sql": "",
+      "reference_text": "当前数据模型中不存在退款原因字段，无法按退款原因统计，请补充该字段或说明可用的替代口径。"
+    },
+    {
+      "id": "java-b-01",
+      "category": "java",
+      "app": "b",
+      "question": "按状态统计订单金额（原生报表口径）",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/src/main/java/com/example/orders/OrderRepository.java:22-24"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "deleted_at is null",
+          "group by status"
+        ],
+        "sql_any": [
+          [
+            "sum(amount)"
+          ]
+        ],
+        "sql_none": [
+          "select *",
+          "is_deleted = 0"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "同一方法名，B 应用使用 deleted_at 软删",
+        "signals": [
+          "soft_delete:null"
+        ]
+      },
+      "reference_sql": "SELECT status, SUM(amount) FROM orders WHERE deleted_at IS NULL GROUP BY status",
+      "wrong_sql": "SELECT status, SUM(amount) FROM orders WHERE is_deleted = 0 GROUP BY status"
+    },
+    {
+      "id": "java-b-02",
+      "category": "java",
+      "app": "b",
+      "question": "列出所有已结算订单",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/src/main/java/com/example/orders/OrderRepository.java:26-27"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "status = 'settled'",
+          "deleted_at is null"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *",
+          "is_deleted = 0"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "SETTLED 枚举",
+        "signals": [
+          "status:settled",
+          "soft_delete:null"
+        ]
+      },
+      "reference_sql": "SELECT id, status, amount FROM orders WHERE status = 'SETTLED' AND deleted_at IS NULL",
+      "wrong_sql": "SELECT id, status, amount FROM orders WHERE status = 'PAID' AND is_deleted = 0"
+    },
+    {
+      "id": "java-b-03",
+      "category": "java",
+      "app": "b",
+      "question": "查询指定状态下未删除的订单",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/src/main/java/com/example/orders/OrderRepository.java:29"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "deleted_at is null",
+          "status = :status"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "select *",
+          "is_deleted = 0"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "派生查询方法名中的 DeletedAtIsNull",
+        "signals": [
+          "soft_delete:null"
+        ]
+      },
+      "reference_sql": "SELECT id, status, amount FROM orders WHERE status = :status AND deleted_at IS NULL",
+      "wrong_sql": "SELECT id, status, amount FROM orders WHERE status = :status AND is_deleted = 0"
+    },
+    {
+      "id": "java-b-04",
+      "category": "java",
+      "app": "b",
+      "question": "营收是多少元？",
+      "provenance": [
+        "tests/fixtures/askdata_stage4/app_b/src/main/java/com/example/orders/OrderRepository.java:32-38"
+      ],
+      "expect": {
+        "outcome": "sql",
+        "tables": [
+          "orders"
+        ],
+        "sql_all": [
+          "deleted_at is null"
+        ],
+        "sql_any": [],
+        "sql_none": [
+          "/ 100",
+          "is_deleted = 0"
+        ],
+        "certification_in": [
+          "certified",
+          "draft"
+        ],
+        "notes": "AMOUNT_UNIT=YUAN，不得再做除法",
+        "signals": [
+          "soft_delete:null",
+          "unit:yuan"
+        ]
+      },
+      "reference_sql": "SELECT SUM(amount) AS total FROM orders WHERE deleted_at IS NULL",
+      "wrong_sql": "SELECT SUM(amount) / 100 AS total FROM orders WHERE is_deleted = 0"
+    },
+    {
+      "id": "java-b-05",
+      "category": "java",
+      "app": "b",
+      "question": "按支付渠道统计已结算订单的金额",
+      "provenance": [
+        "dataset.schema"
+      ],
+      "expect": {
+        "outcome": "clarify",
+        "gap_terms": [
+          "支付渠道",
+          "缺少",
+          "没有",
+          "不存在",
+          "无法确认",
+          "未提供"
+        ],
+        "sql_none": [
+          "channel",
+          "pay_channel"
+        ],
+        "notes": "schema 内没有渠道字段，必须报告缺口",
+        "signals": []
+      },
+      "reference_sql": "",
+      "reference_text": "数据模型中没有支付渠道字段，无法按渠道拆分，请提供渠道字段或说明口径。"
+    }
+  ]
+}

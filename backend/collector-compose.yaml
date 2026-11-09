@@ -1,0 +1,46 @@
+# Run on an explicitly authorized Linux Docker host. Restrict exporter access to Prometheus.
+name: ops-collectors
+services:
+  service-blackbox:
+    profiles: [service-probes]
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0
+    network_mode: host
+    command: ["--config.file=/etc/blackbox/service-blackbox.yml"]
+    volumes: ["./service-blackbox.yml:/etc/blackbox/service-blackbox.yml:ro"]
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    pid: host
+    network_mode: host
+    command: ["--path.procfs=/host/proc", "--path.sysfs=/host/sys", "--path.rootfs=/host/root"]
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    restart: unless-stopped
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.55.1
+    privileged: true
+    devices: ["/dev/kmsg:/dev/kmsg"]
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    ports: ["8080:8080"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    restart: unless-stopped
+  docker-state:
+    # Build the fixed collector locally and transfer this image to the authorized host.
+    image: sentinelops-docker-state:local
+    group_add: ["${DOCKER_SOCKET_GID:-0}"]
+    ports: ["9400:9400"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped

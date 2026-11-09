@@ -1,0 +1,13 @@
+# Build from the already installed backend runtime without copying platform code or credentials.
+# Run from the repository root:
+# docker build -f deployment/inspection-sandbox/Dockerfile.offline -t sentinelops-inspection-sandbox:local .
+FROM sentinelops-backend:local AS runtime
+FROM scratch
+COPY --from=runtime /usr/local /usr/local
+COPY --from=runtime /usr/lib /usr/lib
+COPY --from=runtime /lib /lib
+COPY --from=runtime /lib64 /lib64
+WORKDIR /runner
+COPY deployment/inspection-sandbox/server.py /runner/server.py
+ENV PATH=/usr/local/bin:/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+CMD ["python", "-I", "/runner/server.py"]

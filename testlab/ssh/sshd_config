@@ -1,0 +1,14 @@
+Port 2222
+HostKey /tmp/testlab_host_key
+AuthorizedKeysFile /fixtures/authorized_keys
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+StrictModes no
+AllowUsers root
+DisableForwarding yes
+PermitTTY no
+PermitUserEnvironment no
+ForceCommand /app/.venv/bin/python /lab/forced_command.py
+LogLevel ERROR

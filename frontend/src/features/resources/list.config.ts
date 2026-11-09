@@ -1,0 +1,185 @@
+import type { ListConfig } from "@/types/records";
+import { title, state, updated } from "@/config/listHelpers";
+import { date } from "@/utils/display";
+
+export const resourcesLists: Record<string, ListConfig> = {
+  servers: {
+    title: "服务器",
+    subtitle: "管理采集目标、SSH 连接与 HTTP 健康检查",
+    read: "servers:read",
+    manage: "resources:manage",
+    detail: true,
+    search: true,
+    columns: [
+      title("name", "服务器"),
+      title("host", "主机地址", 180),
+      title("environment", "环境", 120),
+      {
+        key: "monitoring_enabled",
+        label: "监控",
+        width: 100,
+        format: (r) => (r.monitoring_enabled ? "已启用" : "已停用"),
+      },
+      title("last_ssh_test_status", "最近 SSH 测试", 150),
+      updated,
+    ],
+    fields: [
+      { key: "name", label: "名称", required: true },
+      { key: "host", label: "主机地址", required: true },
+      { key: "environment", label: "环境", required: true, default: "test" },
+      {
+        key: "node_exporter_target",
+        label: "node_exporter 目标",
+        required: true,
+        hint: "host:port，例如 node-exporter:9100",
+      },
+      {
+        key: "cadvisor_target",
+        label: "cAdvisor 目标",
+        required: true,
+        hint: "host:port，例如 cadvisor:8080",
+      },
+      {
+        key: "docker_state_target",
+        label: "Docker 状态采集目标",
+        nullable: true,
+        hint: "选填，例如 docker-state:9400",
+      },
+      {
+        key: "health_url",
+        label: "HTTP 健康检查地址",
+        nullable: true,
+        hint: "选填，完整 HTTP(S) URL",
+      },
+      {
+        key: "blackbox_exporter_target",
+        label: "主机探测采集器",
+        nullable: true,
+      },
+      {
+        key: "monitoring_enabled",
+        label: "启用监控",
+        type: "switch",
+        default: true,
+      },
+      {
+        key: "ssh_port",
+        label: "SSH 端口",
+        required: true,
+        type: "number",
+        default: 22,
+        min: 1,
+        max: 65535,
+      },
+      { key: "ssh_user", label: "SSH 用户", default: "ops", required: true },
+      {
+        key: "credential_id",
+        label: "SSH 凭据",
+        type: "select",
+        source: "/ssh-credentials",
+        nullable: true,
+      },
+      {
+        key: "ssh_host_key",
+        label: "固定 SSH 主机公钥",
+        type: "textarea",
+        nullable: true,
+        hint: "绑定凭据时必填，使用完整 OpenSSH 主机公钥",
+      },
+    ],
+  },
+  containers: {
+    title: "Docker 容器",
+    subtitle: "清单状态来自最近同步；实时指标与清单状态分别展示",
+    read: "containers:read",
+    detail: true,
+    search: true,
+    states: ["running", "stopped"],
+    columns: [
+      title("name", "容器"),
+      title("service_name", "容器别名"),
+      title("purpose", "容器备注", 260),
+      title("image", "镜像", 260),
+      state,
+      {
+        key: "last_seen_at",
+        label: "最近采集",
+        width: 175,
+        format: (r) => date(r.last_seen_at),
+      },
+    ],
+  },
+  "llm-endpoints": {
+    title: "LLM 服务",
+    subtitle: "探测真实推理请求，按可用性、延迟和错误分类监控",
+    read: "llm:read",
+    manage: "llm:manage",
+    detail: true,
+    search: true,
+    columns: [
+      title("name", "服务"),
+      title("model", "模型", 170),
+      state,
+      title("last_http_status", "HTTP 状态", 110),
+      {
+        key: "last_latency_ms",
+        label: "最近延迟",
+        width: 140,
+        format: (r) =>
+          r.last_latency_ms === null
+            ? "—"
+            : `${Number(r.last_latency_ms).toFixed(0)} ms`,
+      },
+      {
+        key: "last_probe_at",
+        label: "最近探测",
+        width: 175,
+        format: (r) => date(r.last_probe_at),
+      },
+    ],
+    fields: [
+      { key: "name", label: "服务名称", required: true },
+      {
+        key: "provider",
+        label: "Provider",
+        type: "select",
+        options: [{ label: "DeepSeek", value: "deepseek" }],
+        default: "deepseek",
+        required: true,
+      },
+      {
+        key: "agent_channel_id",
+        label: "Key 来源",
+        type: "select",
+        nullable: true,
+      },
+      {
+        key: "api_key",
+        label: "API Key",
+        type: "password",
+      },
+      {
+        key: "base_url",
+        label: "API 基础地址",
+        required: true,
+        hint: "例如 https://api.deepseek.com/v1",
+      },
+      { key: "model", label: "模型", required: true, default: "deepseek-chat" },
+      {
+        key: "probe_enabled",
+        label: "启用探测",
+        type: "switch",
+        default: true,
+      },
+      {
+        key: "probe_interval_seconds",
+        label: "探测间隔（秒）",
+        required: true,
+        type: "number",
+        min: 60,
+        max: 86400,
+        default: 60,
+      },
+    ],
+  },
+};

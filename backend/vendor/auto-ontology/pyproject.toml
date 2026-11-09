@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "auto-ontology-server"
+version = "1.2.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "pandas>=2.3.3,<3",
+    "sqlalchemy>=2.0.52,<2.1",
+    "psycopg[binary]>=3.3.4,<4",
+    "langchain-core>=1.6.1,<2",
+    "langchain-openai>=1.3.0,<1.3.5",
+    "langgraph>=1.2.11,<2",
+    "openai==2.44.0",
+    "sqlglot>=30.17.0,<31",
+    "requests>=2.34.2,<3",
+    "httpx>=0.28.1,<1",
+    "numpy>=2.5.2,<3",
+    "pyyaml>=6,<7",
+    "python-dotenv>=1.2.3,<2"
+]
+
+[project.optional-dependencies]
+kumo = ["kumo-relational-client[relational]>=1.0.0,<2"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["auto_ontology"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv]
+package = true
+# Patched versions of transitive dependencies flagged by nSpect. Constraints,
+# so their dependents' upper bounds still apply.
+constraint-dependencies = [
+    "pyjwt>=2.15.1",  # BDSA-2026-35552 (via databricks/snowflake connectors)
+    "urllib3>=2.8.0",  # BDSA-2026-35861, BDSA-2026-35864 (via requests, botocore)
+]
+
+[[tool.uv.index]]
+name = "vendored-engine"
+url = "vendor/wheels"
+format = "flat"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.5",
+]
+release = [
+    "ngcsdk>=4.37.0",
+    "pyyaml>=6.0.3",
+]
+
+# Stated, not inherited. With no `select` at all, the rule set is whatever the
+# installed ruff happens to default to -- and 0.16 widened that default from
+# `E4,E7,E9,F` to some twenty families (B, BLE, S, SIM, TRY, UP, ...), turning a
+# routine version bump into 541 findings in code nobody had touched.
+#
+# These are the rules the codebase was written against and passes cleanly. The
+# wider set is worth adopting deliberately, as its own change: a good part of it
+# argues with patterns that are intentional here -- BLE001 and S110 against the
+# best-effort `except Exception` around reads whose failure is meant to
+# degrade rather than raise, for instance -- so it needs judgement per rule, not
+# a bulk `--fix`.
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+# mcp/ is a separate project with its own venv and CI workflow. It must stay out
+# of this suite: pythonpath = ["."] would otherwise make the mcp/ directory
+# shadow the installed mcp SDK as a namespace package.
+addopts = "--import-mode=importlib --ignore=mcp"

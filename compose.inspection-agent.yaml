@@ -1,0 +1,38 @@
+# docker compose -f compose.yaml -f compose.inspection-agent.yaml --profile inspections up -d --build
+services:
+  inspection-sandbox:
+    build: ./deployment/inspection-sandbox
+    image: sentinelops-inspection-sandbox:local
+    profiles: [inspections]
+    environment:
+      SANDBOX_TOKEN_FILE: /run/secrets/sandbox_token
+    secrets:
+      - sandbox_token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [inspection-sandbox]
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+  backend:
+    environment:
+      INSPECTION_SANDBOX_URL: http://inspection-sandbox:8090
+      INSPECTION_SANDBOX_TOKEN_FILE: /run/inspection-sandbox-token
+    secrets:
+      - source: sandbox_token
+        target: /run/inspection-sandbox-token
+    networks: [default, inspection-sandbox]
+    depends_on:
+      inspection-sandbox:
+        condition: service_healthy
+secrets:
+  sandbox_token:
+    file: ./.local/inspection-sandbox.token
+networks:
+  inspection-sandbox:
+    internal: true

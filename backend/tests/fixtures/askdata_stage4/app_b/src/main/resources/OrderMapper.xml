@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Frozen sample application B (read-only fixture, never executed). -->
+<mapper namespace="com.example.orders.OrderMapper">
+  <select id="revenueByStatus" resultType="map">
+    SELECT status, SUM(amount) FROM orders WHERE deleted_at IS NULL GROUP BY status
+  </select>
+  <select id="revenueSince" resultType="map">
+    SELECT status, SUM(amount) FROM orders WHERE paid_at >= #{since} GROUP BY status
+  </select>
+  <select id="dynamicRevenue" resultType="map">
+    SELECT status, SUM(amount) FROM orders
+    <where>
+      <if test="status != null">AND status = #{status}</if>
+    </where>
+    GROUP BY status
+  </select>
+</mapper>

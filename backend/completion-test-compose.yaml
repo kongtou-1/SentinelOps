@@ -1,0 +1,24 @@
+name: ops-completion-test
+services:
+  latency-target:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "/target.py"]
+    volumes: ["./scripts/mock_completion_target.py:/target.py:ro"]
+    ports: ["127.0.0.1:18003:8003"]
+    mem_limit: 48m
+    restart: "no"
+    networks:
+      platform:
+        aliases: [completion-latency]
+  oom-target:
+    image: sentinelops-backend:local
+    command: ["/app/.venv/bin/python", "/target.py"]
+    volumes: ["./scripts/mock_completion_target.py:/target.py:ro"]
+    ports: ["127.0.0.1:18004:8003"]
+    mem_limit: 48m
+    restart: "no"
+    networks: [platform]
+networks:
+  platform:
+    external: true
+    name: sentinelops_default

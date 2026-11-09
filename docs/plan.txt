@@ -1,0 +1,1281 @@
+我重新按你这次明确的边界做了针对性调研。现在这个项目其实已经比最初清晰很多：**第一阶段不要做“大而全的 AIOps 平台”，而是做一个面向 Docker 部署 AI 应用的“人机协同智能运维平台”**。核心不是让 Agent 自己运维，而是让系统负责监控、预测、分析和生成处置方案，**人负责最终决策，系统只执行被批准的 Skill**。
+
+而且有一个很重要的新发现：你选择 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness?utm_source=chatgpt.com) 是可行的。现在官方 Harness 已经明确提供插件、Skill、审批、Python SDK，甚至已有 SSH/远程 subprocess/sandbox 能力；但它仍处于 developer preview，官方明确提示可能发生破坏性兼容变化，所以**可以用，但不要把你的业务系统直接写死在 Harness 内部**。:chatgpt-content-reference{index="2"}
+
+# 一、先把你的项目重新定义清楚
+
+我建议项目最终定义为：
+
+> **面向 Docker 化 AI 应用的人机协同智能预测运维平台**
+>
+> 面向以 Docker 部署的 AI 应用及其宿主服务器，对 CPU、内存、磁盘、网络、Docker 容器、应用服务以及 LLM API 等关键资源进行统一监控、趋势预测与故障告警；利用 DeepSeek Harness、知识库与运维 Skill 对故障进行上下文分析、诊断和处置方案生成，在人工审批后通过 SSH 执行标准化运维 Skill，并自动记录全过程、生成事故摘要与复盘报告，形成“感知—预测—决策—执行—复盘”的人机协同闭环。
+
+这里我建议你明确三个原则：
+
+**第一，不做多 Agent。** 一个 Harness Agent 就够了，它是“智能运维助手”，不是系统控制者。
+
+**第二，LLM 没有最终执行权。** LLM 可以分析、调用只读工具、选择 Skill、填写参数，但真正影响服务器的操作必须进入审批。
+
+**第三，SSH 是执行通道，不应该是主要监控通道。** 你虽然有服务器 SSH 权限，但千万不要每隔 10 秒 SSH 上去跑 `free`、`df`、`docker stats`。正确做法是 SSH 用于首次部署采集器以及审批后的运维执行；日常指标由 Prometheus 体系持续采集。
+
+这会让你的系统架构干净很多。
+
+---
+
+# 二、我建议整个系统就做成“一套系统 + 一套监控底座”
+
+从用户角度，它就是一个系统：
+
+```text
+┌───────────────────────────────────────────────────────────┐
+│                AI 智能运维平台 Web                         │
+│ 仪表盘 / 服务器 / Docker / LLM / 告警 / 事故 / AI / Skill │
+└──────────────────────┬────────────────────────────────────┘
+                       │ REST/WebSocket
+                ┌──────▼───────┐
+                │ FastAPI 后端  │
+                │ 业务控制中心   │
+                └──────┬───────┘
+                       │
+       ┌───────────────┼──────────────────┐
+       │               │                  │
+ ┌─────▼─────┐   ┌────▼─────┐     ┌─────▼────────┐
+ │监控/告警模块│   │预测算法模块│     │ AI运维模块    │
+ │Prometheus │   │ Python   │     │DeepSeek      │
+ │Alertmanager│  │ Forecast │     │Harness       │
+ └─────┬─────┘   └──────────┘     └─────┬────────┘
+       │                                 │
+       │                          知识库 / Skill
+       │                                 │
+┌──────▼─────────────────────────────────▼─────────┐
+│                  被管理服务器                     │
+│ node_exporter + cAdvisor + Docker                 │
+│                                                  │
+│       审批后 ───────── SSH ────────> Skill执行    │
+└──────────────────────────────────────────────────┘
+```
+
+技术上是几个组件，但产品层面完全可以作为一个系统，通过 Docker Compose 一键部署。
+
+你现在**不需要 Kubernetes，不需要 CI/CD，也不需要微服务化**。
+
+---
+
+# 三、监控部分是整个项目真正的底座
+
+建议直接采用：
+
+**node_exporter + cAdvisor + Prometheus + Alertmanager + Blackbox Exporter。**
+
+[Prometheus Node Exporter 官方文档](https://prometheus.io/docs/guides/node-exporter/?utm_source=chatgpt.com)明确支持 Linux 主机 CPU、内存、文件系统、网络等指标；[cAdvisor](https://github.com/google/cadvisor?utm_source=chatgpt.com)原生支持 Docker，并能够提供容器 CPU、内存、磁盘 I/O、网络等指标。:chatgpt-content-reference{index="5"}
+
+每台被管理服务器：
+
+```text
+Server A
+ ├─ Docker
+ │   ├─ AI App 1
+ │   ├─ AI App 2
+ │   ├─ MySQL
+ │   └─ Redis
+ │
+ ├─ node_exporter :9100
+ └─ cAdvisor      :8080
+```
+
+中央服务器：
+
+```text
+Prometheus
+    ↓
+Alert Rules
+    ↓
+Alertmanager
+    ↓ webhook
+你的 FastAPI
+    ↓
+创建告警/事故
+    ↓
+邮件
+    ↓
+AI 分析
+```
+
+Alertmanager 本身就支持通知路由和 receiver，所以第一版完全不用自己重新造告警调度器。:chatgpt-content-reference{index="6"}
+
+## 第一版必须监控的指标
+
+我建议不要一开始上几十种花哨指标，先保证下面这些。
+
+| 类别 | 必须监控 | 告警示例 | 是否预测 |
+|---|---|---|---|
+| CPU | 使用率、Load、IO Wait | >85% / >95% | ★★★ |
+| 内存 | Available、使用率、Swap | <15% / <8% | ★★★★★ |
+| 磁盘 | 使用率、剩余空间 | >85% / >92% | ★★★★★ |
+| Inode | 使用率 | >85% / >92% | ★★★ |
+| Disk IO | IO吞吐、IO等待 | 长期异常 | ★★★ |
+| 网络 | RX/TX、错误、丢包 | 突增/丢包 | ★★★★ |
+| Docker | UP/DOWN | 容器停止 | 不需要 |
+| Docker | CPU/内存 | 超限 | ★★★★ |
+| Docker | restart | 频繁重启 | 不需要 |
+| Docker | OOM | OOM Kill | 不需要 |
+| HTTP | 可用性 | HTTP失败 | 不需要 |
+| HTTP | 响应时间 | 延迟过高 | ★★★ |
+| LLM | 可用性 | 请求失败 | ★★★ |
+| LLM | 响应时间 | 延迟过高 | ★★★★ |
+| LLM | 错误码 | 401/402/429/5xx | 不需要 |
+
+尤其磁盘预测非常适合做成你项目的展示亮点。
+
+Prometheus 自己甚至已经提供 `predict_linear()`，可以用历史 Gauge 数据进行线性预测。:chatgpt-content-reference{index="7"}
+
+例如：
+
+```text
+当前磁盘：
+72%
+
+预测：
+6小时后：76%
+12小时后：82%
+24小时后：94%
+
+预计磁盘耗尽：
+31小时后
+
+风险：
+HIGH
+```
+
+这样就不是：
+
+> 磁盘已经 92% 了！
+
+而是：
+
+> 按当前增长速度，预计 24 小时内磁盘将超过 90%。
+
+这才体现“预测运维”。
+
+---
+
+# 四、预测算法不要一开始做得过重
+
+这一部分很容易掉进一个坑：
+
+> 为了体现 AI，什么都拿 Transformer/LSTM 预测。
+
+我反而建议第一版采用三级算法。
+
+```text
+Level 1
+固定阈值
+    ↓
+Level 2
+趋势/统计预测
+    ↓
+Level 3
+异常检测
+```
+
+第一阶段算法：
+
+```text
+滑动平均
+EWMA
+线性回归
+Prometheus predict_linear
+Z-Score / Robust Z-Score
+```
+
+第二阶段再加入：
+
+```text
+ARIMA / SARIMA
+Prophet
+Isolation Forest
+STL + 异常检测
+```
+
+深度时序模型暂缓。
+
+因为你的目标不是发表时序论文，而是：
+
+**提前发现“这个资源什么时候会出问题”。**
+
+尤其适合预测：
+
+```text
+磁盘剩余空间
+内存长期增长
+网络带宽趋势
+CPU周期性负载
+容器内存增长
+LLM API延迟趋势
+LLM API错误率趋势
+```
+
+而：
+
+```text
+容器突然死亡
+服务器宕机
+LLM 401
+Docker OOM
+HTTP 500
+```
+
+这些不应该等预测模型，直接实时告警。
+
+预测任务可以每 5 分钟跑一次：
+
+```text
+Prometheus
+   ↓ query_range
+最近 24h / 7d 数据
+   ↓
+Prediction Engine
+   ↓
+预测未来 1h / 6h / 24h
+   ↓
+风险计算
+   ↓
+prediction_result
+   ↓
+触发预测告警
+```
+
+Prometheus 官方 HTTP API 本身支持 range query，所以 Python 算法服务直接取历史时间序列即可。:chatgpt-content-reference{index="8"}
+
+---
+
+# 五、LLM API 必须被视为一种“核心基础资源”
+
+这个点我非常赞同你的判断。
+
+你的 AI 应用和传统 Web 应用最大的区别之一就是：
+
+```text
+服务器正常
+Docker正常
+数据库正常
+网络正常
+
+但是：
+
+DeepSeek API 挂了
+
+=> AI应用实际上已经不可用
+```
+
+所以系统里应该专门有：
+
+## LLM 资源中心
+
+例如：
+
+```text
+LLM资源
+
+DeepSeek Production
+模型：deepseek-xxx
+状态：● 正常
+成功率：99.82%
+平均响应：1.7s
+P95：3.4s
+最近检测：10秒前
+
+请求：
+成功       983
+401          0
+402          0
+429          4
+5xx          2
+Timeout      3
+```
+
+不能只监控：
+
+```text
+https://api.xxx.com
+```
+
+是否能 HTTP 连接。
+
+需要两层。
+
+第一层用 [Prometheus Blackbox Exporter](https://github.com/prometheus/blackbox_exporter/blob/master/README.md?utm_source=chatgpt.com) 做 HTTP/TCP/DNS/TLS 探测，它本身支持 HTTP、HTTPS、DNS、TCP、ICMP 和 gRPC。:chatgpt-content-reference{index="10"}
+
+第二层自己做 `llm_probe`：
+
+```text
+每60秒
+
+POST Chat Completion
+
+prompt:
+"Return OK"
+
+max_tokens:
+1~5
+```
+
+记录：
+
+```text
+llm_probe_success
+llm_request_duration
+llm_time_to_first_token
+llm_http_status
+llm_auth_success
+llm_rate_limit
+llm_output_valid
+llm_input_tokens
+llm_output_tokens
+```
+
+DeepSeek 官方目前明确区分 401 认证失败、402 余额不足、429 限流、500 服务错误和 503 过载，这些正好可以直接转换成你的告警原因。:chatgpt-content-reference{index="11"}
+
+于是你可以出现非常有价值的告警：
+
+> **LLM-P1：DeepSeek Production 连续 3 次推理失败**  
+> HTTP：503  
+> 最近 5 分钟成功率：31%  
+> 平均延迟：1.8s → 8.4s  
+> 服务器资源正常  
+> 初步判断：外部 LLM Provider 异常，而非本地应用故障。
+
+这就是你的平台与普通服务器监控平台明显不同的地方。
+
+---
+
+# 六、DeepSeek Harness 在你的系统里应该放在哪里
+
+这里我建议**不要把整个后端建立在 Harness 上**。
+
+正确关系是：
+
+```text
+你的系统
+   │
+   ├── 监控
+   ├── 用户
+   ├── 服务器
+   ├── 告警
+   ├── 预测
+   ├── 事故
+   ├── 审批
+   │
+   └── AI Engine
+          │
+          └── DeepSeek Harness
+```
+
+而不是：
+
+```text
+DeepSeek Harness
+     ↓
+整个系统
+```
+
+原因很简单。
+
+Harness 官方目前还是 developer preview，存在兼容性破坏风险。:chatgpt-content-reference{index="12"}
+
+但好消息是它已经很适合你这个场景。
+
+它现在有：
+
+```text
+Agent Loop
+Plugin
+Tool
+Skill
+LLM Adapter
+Session
+Approval
+Credential
+SSH
+Sandbox
+Python SDK
+```
+
+官方架构就是 Everything is a Plugin，模型、Tool Registry、Session、Agent Loop 等都可以作为插件替换。:chatgpt-content-reference{index="13"}
+
+更关键的是现在已经有 **Python SDK**，Python 程序可以启动并驱动 Harness runtime，所以你的 FastAPI 后端不用因为 Harness 是 TypeScript/Node 生态就改成 Node。:chatgpt-content-reference{index="14"}
+
+所以：
+
+```text
+FastAPI
+   │
+DeepSeek Harness Python SDK
+   │
+Harness Runtime
+   │
+DeepSeek
+```
+
+非常适合你的技术路线。
+
+---
+
+# 七、Skill 要分成两类，这是设计上的关键
+
+Harness 本身已经有 Skill 系统，可以从 filesystem 等来源发现和加载 Skill。:chatgpt-content-reference{index="15"}
+
+但你的运维 Skill **不能只是 Markdown Prompt**。
+
+我建议分成：
+
+### A. Skill（Agent 技能）
+
+告诉 Agent 在什么任务下使用哪些工具、按什么步骤检查，以及输出什么结果。
+本平台通过 list_skills 查看目录，再通过 read_skill 按 ID 和版本加载完整指令；知识库负责提供参考资料。
+
+例如：
+
+```text
+skill:
+docker-high-memory
+
+现象：
+Docker容器内存持续增长
+
+检查：
+1. docker stats
+2. docker inspect
+3. 查看OOM
+4. 查看最近日志
+5. 检查宿主机内存
+
+可能原因：
+...
+```
+
+Skill 的任务指令可以复用。当前以平台数据库管理并通过只读 MCP 加载，不接入 Harness 原生文件系统 Skill 插件，不开放脚本执行。
+
+### B. Action Skill
+
+真正执行。
+
+例如：
+
+```yaml
+name: restart_container
+
+risk: medium
+
+parameters:
+  server_id:
+  container_name:
+
+precheck:
+  - container_exists
+  - server_online
+
+actions:
+  - docker inspect {{container_name}}
+  - docker restart {{container_name}}
+
+verify:
+  - container_running
+  - healthcheck_ok
+
+rollback:
+  - null
+
+require_approval: true
+```
+
+这部分建议你自己设计。
+
+LLM **绝对不要直接生成：**
+
+```bash
+rm ...
+docker ...
+systemctl ...
+```
+
+然后 SSH 执行。
+
+而应该：
+
+```text
+LLM
+
+“建议执行 restart_container”
+        ↓
+参数
+server=server01
+container=ai-api
+        ↓
+系统校验 Skill
+        ↓
+等待审批
+```
+
+页面：
+
+```text
+AI 建议操作
+
+Skill：
+重启 Docker 容器
+
+服务器：
+192.168.x.x
+
+容器：
+ai-api
+
+原因：
+连续5分钟内存>95%
+HTTP探测失败
+日志出现OOM
+
+风险：
+中
+
+[拒绝]       [批准执行]
+```
+
+只有用户点击：
+
+> 批准执行
+
+Backend 才调用 SSH。
+
+这正好与你的人机协同理念一致。
+
+而且 Harness 自己已经有 one-shot approval 机制：`allowed-once` 只批准这一次操作，拒绝/取消/审批不可用都会 fail closed，并记录审批审计。:chatgpt-content-reference{index="16"}
+
+这部分实际上可以大量复用。
+
+---
+
+# 八、甚至 SSH Harness 也已经有，但我不建议第一版完全交给它
+
+这次调研我发现 Harness 已经存在：
+
+```text
+ssh/
+fs-ssh
+subprocess-ssh
+sandbox-ssh
+```
+
+官方把它描述成 POSIX SSH connection + remote filesystem + subprocess + sandbox provider。:chatgpt-content-reference{index="17"}
+
+所以技术上完全可以：
+
+```text
+Agent
+ ↓
+Skill
+ ↓
+Harness SSH
+ ↓
+Server
+```
+
+但是你的场景是**多服务器运维平台**。
+
+所以第一版我更建议：
+
+```text
+Agent
+ ↓
+你的 Tool
+ ↓
+FastAPI
+ ↓
+Approval Service
+ ↓
+Skill Engine
+ ↓
+SSH Manager
+ ↓
+Server
+```
+
+也就是 Agent 不能直接掌握所有服务器的 SSH。
+
+Harness 看到的 Tool 最好只有：
+
+```text
+get_server_metrics
+get_container_status
+get_container_logs
+get_alert_context
+query_knowledge
+list_available_skills
+propose_skill
+```
+
+真正改变服务器状态的：
+
+```text
+execute_skill
+```
+
+必须由你的业务后端控制。
+
+这样 RBAC、审计、审批、安全边界都掌握在你自己的系统手里。
+
+---
+
+# 九、完整“感知—预测—决策—执行—复盘”应该这样实现
+
+这可以成为你的核心技术创新流程。
+
+```text
+① 感知 Perception
+        ↓
+Prometheus
+cAdvisor
+node_exporter
+Blackbox
+LLM Probe
+        ↓
+② 预测 Prediction
+        ↓
+阈值
+趋势预测
+异常检测
+        ↓
+③ 事件 Incident
+        ↓
+CPU异常 / 内存异常
+磁盘风险 / Docker故障
+LLM API故障
+        ↓
+④ AI分析 Decision Support
+        ↓
+收集：
+指标 + Docker状态
+日志 + 历史事故
+预测结果 + 知识库
+        ↓
+DeepSeek Harness
+        ↓
+原因分析
+影响分析
+推荐 Skill
+        ↓
+⑤ 人类决策 Human Decision
+        ↓
+拒绝 / 批准
+        ↓
+⑥ 执行 Execution
+        ↓
+Skill Engine
+        ↓
+SSH
+        ↓
+Docker / Linux
+        ↓
+⑦ 验证 Verification
+        ↓
+重新检查指标
+HTTP健康检查
+LLM健康检查
+        ↓
+⑧ 复盘 Review
+        ↓
+LLM生成事故报告
+        ↓
+管理员审核
+        ↓
+导出 / 邮件发送
+        ↓
+知识库
+```
+
+这里最重要的是：
+
+**Decision 不是“AI Decision”，而是“AI Decision Support + Human Decision”。**
+
+这会让你的项目设计更加严谨。
+
+---
+
+# 十、一次真实故障应该是什么体验
+
+例如：
+
+### 14:02
+
+系统发现：
+
+```text
+ai-service 容器
+
+Memory:
+71 → 76 → 82 → 89 → 94%
+
+预测：
+约17分钟后达到98%
+
+同时：
+HTTP P95延迟
+1.2s → 4.8s
+```
+
+产生：
+
+> P1 预测告警：ai-service 存在内存耗尽风险。
+
+### 14:02:05
+
+Harness 自动做**只读诊断**：
+
+```text
+docker stats
+docker inspect
+OOM信息
+最近日志
+服务器内存
+最近1h指标
+历史事故
+```
+
+### 14:02:10
+
+DeepSeek 输出：
+
+```text
+初步判断：
+ai-service 可能存在持续内存增长。
+
+证据：
+1. 过去45分钟内存单调增长
+2. 宿主机其他容器稳定
+3. 网络流量无明显变化
+4. 最近日志存在 xxx
+
+建议：
+
+Skill:
+restart_container
+
+风险：
+Medium
+
+预计影响：
+服务短暂中断约5~15秒
+```
+
+### 管理员/运维人员
+
+看到：
+
+```text
+[拒绝]
+
+[批准执行 restart_container]
+```
+
+### 点击批准
+
+```text
+Skill Engine
+      ↓
+SSH
+      ↓
+docker restart ai-service
+      ↓
+等待健康检查
+```
+
+### 14:02:25
+
+```text
+Container：Running
+HTTP：200
+Memory：32%
+P95：1.1s
+```
+
+事故状态：
+
+> 已恢复。
+
+### AI 自动生成
+
+```text
+事故持续时间：23秒
+
+现象：
+...
+
+可能原因：
+...
+
+采取措施：
+...
+
+恢复结果：
+...
+
+建议：
+检查 xxx 模块潜在内存泄漏。
+```
+
+这就是一个非常完整、而且实际能做出来的 Demo。
+
+---
+
+# 十一、你的前后端和算法技术栈，我建议这样定
+
+| 部分 | 建议 |
+|---|---|
+| 前端 | Vue 3 + TypeScript + Element Plus + ECharts |
+| 后端 | Python FastAPI |
+| ORM | SQLAlchemy |
+| 主数据库 | PostgreSQL |
+| 向量库 | PostgreSQL + pgvector |
+| 缓存/任务 | Redis |
+| 异步任务 | Celery |
+| 时间序列 | Prometheus |
+| 主机监控 | node_exporter |
+| Docker监控 | cAdvisor |
+| HTTP/网络探测 | Blackbox Exporter |
+| 告警 | Alertmanager |
+| 预测算法 | Pandas + NumPy + statsmodels + scikit-learn |
+| Agent | DeepSeek Harness |
+| LLM | DeepSeek API |
+| 知识库 | 自建 RAG + pgvector |
+| Skill | Harness Skill + 自建 Action Skill |
+| SSH | Paramiko/AsyncSSH，后期可研究 Harness SSH |
+| 邮件 | SMTP |
+| 部署 | Docker Compose |
+
+我尤其推荐 **FastAPI**，因为你的：
+
+```text
+预测算法
+异常检测
+RAG
+数据处理
+LLM
+```
+
+本身就是 Python 优势领域。
+
+而 Harness 官方已经提供 Python SDK，所以不存在语言割裂的大问题。:chatgpt-content-reference{index="18"}
+
+---
+
+# 十二、系统页面其实也已经可以确定了
+
+第一版前端我建议只做 9 个一级菜单：
+
+```text
+总览 Dashboard
+
+资源中心
+ ├─ 服务器
+ ├─ Docker
+ ├─ AI应用
+ └─ LLM资源
+
+监控中心
+ ├─ 实时监控
+ └─ 趋势预测
+
+告警中心
+
+事故中心
+
+AI运维助手
+
+知识库
+
+Skill中心
+
+系统管理
+ ├─ 用户
+ ├─ 角色
+ ├─ 邮件
+ ├─ SSH凭据
+ ├─ LLM配置
+ └─ 告警规则
+```
+
+角色第一版只做三个：
+
+```text
+Viewer 普通用户
+→ 查看
+
+Operator 运维人员
+→ 查看 + 诊断 + 事故处理 + 审批授权范围内Skill
+
+Admin 管理员
+→ 服务器/Skill/LLM/用户/规则/审批/审计管理
+```
+
+不用一开始做复杂多租户。
+
+---
+
+# 十三、数据库的核心实体也可以先定下来
+
+不用设计几十张表，核心关系大概是：
+
+```text
+User
+Role
+
+Server
+SSHCredential
+
+DockerContainer
+AIApplication
+
+LLMEndpoint
+
+MetricConfig
+AlertRule
+AlertEvent
+
+PredictionTask
+PredictionResult
+
+Incident
+IncidentTimeline
+
+KnowledgeDocument
+
+Skill
+SkillVersion
+SkillExecution
+Approval
+
+AgentSession
+AgentAnalysis
+
+Notification
+
+Postmortem
+
+AuditLog
+```
+
+其中 `Incident` 是非常关键的中心实体。
+
+因为：
+
+```text
+Alert ≠ Incident
+```
+
+同一事故可能产生：
+
+```text
+CPU告警
+Memory告警
+HTTP告警
+Docker告警
+LLM调用失败
+```
+
+最终应该聚合成：
+
+> Incident #20261001-001 AI Service unavailable
+
+然后让 LLM 对**事故**分析，而不是每来一个告警就问一次 LLM。
+
+这样既减少 Token 消耗，也降低告警风暴。
+
+---
+
+# 十四、我建议你的开发顺序不要按照“前端→后端→AI”做
+
+应该按照闭环纵向开发。
+
+### 第一阶段：把监控跑起来
+
+先不碰 LLM。
+
+完成：
+
+```text
+服务器管理
+SSH连接测试
+
+node_exporter
+cAdvisor
+
+Prometheus
+
+CPU
+Memory
+Disk
+Network
+Docker
+
+图表
+```
+
+做到：
+
+> 添加一台服务器 → 自动看到指标。
+
+### 第二阶段：告警
+
+完成：
+
+```text
+Alert Rules
+Alertmanager
+Webhook
+AlertEvent
+邮件
+确认/关闭告警
+```
+
+做到：
+
+> Docker 停止 → 30 秒内平台产生告警 → 邮件收到。
+
+### 第三阶段：预测
+
+实现：
+
+```text
+Memory
+Disk
+CPU
+Network
+
+1h
+6h
+24h
+```
+
+先：
+
+```text
+Linear Regression
+predict_linear
+EWMA
+```
+
+做到：
+
+> 磁盘还没满，平台已经预测 24h 后会超过 90%。
+
+### 第四阶段：LLM资源监控
+
+实现：
+
+```text
+LLM Endpoint
+Blackbox
+LLM Probe
+成功率
+延迟
+TTFT
+错误分类
+Token
+```
+
+做到：
+
+> DeepSeek 503 → LLM告警。
+
+### 第五阶段：事故中心
+
+把多个 Alert 聚合：
+
+```text
+Alert
+   ↓
+Incident
+   ↓
+Timeline
+```
+
+做到一个完整事故页面。
+
+### 第六阶段：DeepSeek Harness
+
+接入：
+
+```text
+FastAPI
+ ↓
+Harness Python SDK
+ ↓
+DeepSeek
+```
+
+给它只读 Tools：
+
+```text
+metrics
+docker status
+logs
+alerts
+predictions
+knowledge
+```
+
+做到：
+
+> 点击“AI分析事故” → 自动生成诊断。
+
+### 第七阶段：Knowledge + Skill
+
+先写 10 个非常实际的 Skill：
+
+```text
+服务器高CPU诊断
+服务器高内存诊断
+磁盘空间不足诊断
+Docker容器停止诊断
+Docker OOM诊断
+Docker频繁重启诊断
+网络异常诊断
+HTTP服务异常诊断
+LLM API不可用诊断
+LLM API延迟异常诊断
+```
+
+然后增加 Action Skill：
+
+```text
+restart_container
+start_container
+stop_container
+clean_docker_logs
+clean_temp_files
+```
+
+后两种危险程度明显更高。
+
+### 第八阶段：审批执行
+
+完成：
+
+```text
+AI建议
+↓
+Skill
+↓
+Approval
+↓
+人批准
+↓
+SSH
+↓
+Precheck
+↓
+Execute
+↓
+Verify
+↓
+Audit
+```
+
+这时你的项目核心才真正闭环。
+
+### 第九阶段：复盘
+
+最后增加：
+
+```text
+事故时间线
+告警
+AI分析
+审批
+执行记录
+恢复情况
+
+        ↓ LLM
+
+Postmortem
+        ↓
+管理员编辑
+        ↓
+PDF/Word
+        ↓
+Email
+```
+
+---
+
+# 十五、这样一来，你项目真正的创新点也会更好讲
+
+不要把创新点讲成：
+
+> “我们用了 LLM + Agent。”
+
+这个现在已经不够了。
+
+你的项目真正可以总结成三个点。
+
+**① 面向 AI 应用的“双资源监控”。**
+
+传统：
+
+```text
+服务器
+Docker
+网络
+```
+
+你的系统增加：
+
+```text
+LLM Provider
+推理成功率
+推理延迟
+TTFT
+Token
+限流
+模型可用性
+```
+
+形成：
+
+> **Infrastructure + LLM Infrastructure**
+
+**② 预测驱动，而不是单纯阈值告警。**
+
+```text
+现在有没有问题
+        ↓
+什么时候可能出现问题
+```
+
+形成：
+
+> **Threshold + Anomaly + Forecast**
+
+**③ LLM 不替代人，而是形成受控的人机协同闭环。**
+
+```text
+监控感知
+ ↓
+算法预测
+ ↓
+LLM诊断
+ ↓
+Skill建议
+ ↓
+人类审批
+ ↓
+受控执行
+ ↓
+验证
+ ↓
+LLM复盘
+```
+
+这比“Agent 自动 SSH 修服务器”在项目设计上成熟得多。
+

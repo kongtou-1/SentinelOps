@@ -1,0 +1,261 @@
+name: sentinelops
+
+services:
+  frontend:
+    build: ./frontend
+    image: sentinelops-frontend:local
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ops_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-ops_platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env first}
+      TZ: UTC
+    command: ["postgres", "-c", "timezone=UTC"]
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    profiles: [setup]
+    build: ./backend
+    image: sentinelops-backend:local
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    command: ["/app/.venv/bin/alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  prepare-volumes:
+    profiles: [setup]
+    build: ./backend
+    image: sentinelops-backend:local
+    user: "0:0"
+    command: ["/app/.venv/bin/python", "/app/prepare_volumes.py"]
+    secrets:
+      - source: credential_key
+        target: /seed/credential_key
+      - source: monitoring_token
+        target: /seed/monitoring_token
+      - source: alertmanager_token
+        target: /seed/alertmanager_token
+    volumes:
+      - ./.local/monitoring:/config:ro
+      - ./.local/ai-secrets:/config-ai:ro
+      - backend_secrets:/owned/backend
+      - prometheus_secrets:/owned/prometheus
+      - alertmanager_secrets:/owned/alertmanager
+      - platform_rules:/owned/rules
+      - source_store:/owned/sources
+      - notification_config:/owned/notifications
+      - archives:/owned/archives
+    restart: "no"
+
+  backend:
+    init: true
+    stop_grace_period: 35s
+    command: ["/app/.venv/bin/python", "-m", "app.cli.runtime"]
+    build: ./backend
+    image: sentinelops-backend:local
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      PROMETHEUS_URL: http://prometheus:9090
+      ALERTMANAGER_URL: http://alertmanager:9093
+      NOTIFICATION_CONFIG_DIR: /etc/notification-config
+      BLACKBOX_URL: http://blackbox:9115
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+      MONITORING_TOKEN_FILE: /run/secrets/monitoring_token
+      ALERTMANAGER_TOKEN_FILE: /run/secrets/alertmanager_token
+      MONITORING_RULES_DIR: /etc/platform-rules
+      BACKEND_WORKERS: ${BACKEND_WORKERS-operations,prediction,source,inspection,ai,report,askdata}
+      PLATFORM_WORKERS: ${PLATFORM_WORKERS:-operations,prediction,source,inspection,ai,report,askdata,execution}
+      # 运维开关：置为 on/true/1/yes 时停止受理新增问数构建与问数任务，
+      # 已在运行的任务照常结束，查询历史与配置读取不受影响。
+      ASKDATA_PAUSED: ${ASKDATA_PAUSED:-}
+      SOURCE_INPUT_DIR: /source-input
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_KEY_FILE: /run/secrets/deepseek_key
+      EMBEDDING_MODEL_DIR: /opt/embedding-model
+      SOURCE_STORE_DIR: /var/lib/platform-sources
+      ARCHIVE_DIR: /var/lib/platform-archives
+    volumes:
+      - backend_secrets:/run/secrets:ro
+      - platform_rules:/etc/platform-rules
+      - ./.local/embedding-model:/opt/embedding-model:ro
+      - source_store:/var/lib/platform-sources
+      - notification_config:/etc/notification-config
+      - archives:/var/lib/platform-archives
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-m", "app.cli.runtime", "--check"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 45s
+    restart: unless-stopped
+
+  execution-worker:
+    image: sentinelops-backend:local
+    build: ./backend
+    profiles: [execution]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      CREDENTIAL_KEY_FILE: /run/secrets/credential_key
+    volumes:
+      - backend_secrets:/run/secrets:ro
+    command: ["/app/.venv/bin/python", "-m", "app.workers.executions"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib,time; assert time.time()-float(pathlib.Path('/tmp/execution-worker.heartbeat').read_text()) < 130"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.5.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=35d", "--web.enable-lifecycle"]
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"]
+    volumes:
+      - ./.local/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - platform_rules:/etc/prometheus/platform-rules:ro
+      - prometheus_secrets:/run/secrets:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager:v0.34.1
+    profiles: [monitoring]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager", "--cluster.listen-address="]
+    ports: ["127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"]
+    volumes:
+      - notification_config:/etc/alertmanager:ro
+      - alertmanager_secrets:/run/secrets:ro
+      - alertmanager_data:/alertmanager
+    restart: unless-stopped
+
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.28.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes: ["./monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro"]
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    profiles: [mail-test, local-test]
+    ports: ["127.0.0.1:8025:8025"]
+    volumes: ["mailpit_data:/data"]
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    restart: unless-stopped
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.12.1
+    profiles: [local-collectors, local-test]
+    pid: host
+    command: ["--path.procfs=/host/proc", "--path.sysfs=/host/sys", "--path.rootfs=/host/root"]
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    restart: unless-stopped
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.55.1
+    profiles: [local-collectors, local-test]
+    privileged: true
+    devices: ["/dev/kmsg:/dev/kmsg"]
+    command: ["--docker_only=true", "--housekeeping_interval=15s"]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    restart: unless-stopped
+
+  test-app:
+    image: sentinelops-backend:local
+    profiles: [local-test]
+    command: ["/app/.venv/bin/python", "-m", "http.server", "8001"]
+    restart: unless-stopped
+
+  docker-state:
+    image: sentinelops-docker-state:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.docker-state
+    profiles: [local-collectors, local-test]
+    group_add: ["${DOCKER_SOCKET_GID:-0}"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  test-worker:
+    image: sentinelops-backend:local
+    profiles: [local-test]
+    command: ["/app/.venv/bin/python", "-c", "import time; time.sleep(86400)"]
+    restart: unless-stopped
+
+  test-llm:
+    image: sentinelops-backend:local
+    profiles: [local-test]
+    command: ["/app/.venv/bin/python", "/mock_llm.py"]
+    volumes: ["./backend/scripts/mock_llm.py:/mock_llm.py:ro"]
+    ports: ["127.0.0.1:18002:8002"]
+    restart: unless-stopped
+
+volumes:
+  archives:
+  notification_config:
+  postgres_data:
+  prometheus_data:
+  alertmanager_data:
+  mailpit_data:
+  backend_secrets:
+  prometheus_secrets:
+  alertmanager_secrets:
+  platform_rules:
+  source_store:
+
+secrets:
+  credential_key:
+    file: ./.local/credential.key
+  monitoring_token:
+    file: ./.local/monitoring.token
+  alertmanager_token:
+    file: ./.local/alertmanager.token

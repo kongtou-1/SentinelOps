@@ -1,0 +1,785 @@
+{
+  "role_permissions": {
+    "table": "\nCREATE TABLE role_permissions (\n\tid UUID NOT NULL, \n\trole_id UUID NOT NULL, \n\tpermission VARCHAR(80) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_role_permissions PRIMARY KEY (id), \n\tCONSTRAINT uq_role_permissions_role_id UNIQUE (role_id, permission), \n\tCONSTRAINT fk_role_permissions_role_id_roles FOREIGN KEY(role_id) REFERENCES roles (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_role_permissions_role_id ON role_permissions (role_id)"
+    ]
+  },
+  "access_policies": {
+    "table": "\nCREATE TABLE access_policies (\n\tid UUID NOT NULL, \n\tresource_kind VARCHAR(30) NOT NULL, \n\tresource_id VARCHAR(100) NOT NULL, \n\tuser_id UUID, \n\trestricted BOOLEAN NOT NULL, \n\tversion INTEGER NOT NULL, \n\tupdated_by UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_access_policies PRIMARY KEY (id), \n\tCONSTRAINT uq_access_policies_resource_kind UNIQUE NULLS NOT DISTINCT (resource_kind, resource_id, user_id), \n\tCONSTRAINT fk_access_policies_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_access_policies_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_access_policies_user_id ON access_policies (user_id)"
+    ]
+  },
+  "access_requests": {
+    "table": "\nCREATE TABLE access_requests (\n\tid UUID NOT NULL, \n\tuser_id UUID NOT NULL, \n\tidempotency_key UUID NOT NULL, \n\titems JSON NOT NULL, \n\treason VARCHAR(2000) NOT NULL, \n\tduration_days INTEGER, \n\tstatus VARCHAR(20) NOT NULL, \n\tdecided_by UUID, \n\tdecided_at TIMESTAMP WITH TIME ZONE, \n\tdecision_comment VARCHAR(2000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_access_requests PRIMARY KEY (id), \n\tCONSTRAINT ck_access_requests_status CHECK (status IN ('pending','approved','rejected','withdrawn','invalidated')), \n\tCONSTRAINT uq_access_requests_user_id UNIQUE (user_id, idempotency_key), \n\tCONSTRAINT fk_access_requests_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_access_requests_decided_by_users FOREIGN KEY(decided_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_access_requests_user_id ON access_requests (user_id)"
+    ]
+  },
+  "access_grants": {
+    "table": "\nCREATE TABLE access_grants (\n\tid UUID NOT NULL, \n\trequest_id UUID NOT NULL, \n\tuser_id UUID NOT NULL, \n\tpermission VARCHAR(80) NOT NULL, \n\tresource_kind VARCHAR(30) NOT NULL, \n\tresource_id VARCHAR(100) NOT NULL, \n\tinclude_descendants BOOLEAN NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE, \n\trevoked_at TIMESTAMP WITH TIME ZONE, \n\trevoked_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_access_grants PRIMARY KEY (id), \n\tCONSTRAINT uq_access_grants_request_id UNIQUE (request_id, permission, resource_kind, resource_id), \n\tCONSTRAINT fk_access_grants_request_id_access_requests FOREIGN KEY(request_id) REFERENCES access_requests (id), \n\tCONSTRAINT fk_access_grants_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_access_grants_revoked_by_users FOREIGN KEY(revoked_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_access_grants_request_id ON access_grants (request_id)",
+      "CREATE INDEX ix_access_grants_user_id ON access_grants (user_id)"
+    ]
+  },
+  "agent_configs": {
+    "table": "\nCREATE TABLE agent_configs (\n\tmodule VARCHAR(20) NOT NULL, \n\tenabled BOOLEAN DEFAULT 'true' NOT NULL, \n\tversion INTEGER DEFAULT '1' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_agent_configs PRIMARY KEY (module)\n)\n\n",
+    "indexes": []
+  },
+  "agent_channels": {
+    "table": "\nCREATE TABLE agent_channels (\n\tid UUID NOT NULL, \n\tmodule VARCHAR(20) NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tposition INTEGER NOT NULL, \n\tbase_url VARCHAR(2000) NOT NULL, \n\tmodel VARCHAR(100) NOT NULL, \n\tencrypted_api_key TEXT NOT NULL, \n\ttimeout_seconds INTEGER NOT NULL, \n\tlast_used_at TIMESTAMP WITH TIME ZONE, \n\tlast_success BOOLEAN, \n\tlast_error VARCHAR(60), \n\tlast_latency_ms FLOAT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_agent_channels PRIMARY KEY (id), \n\tCONSTRAINT fk_agent_channels_module_agent_configs FOREIGN KEY(module) REFERENCES agent_configs (module)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_agent_channels_module ON agent_channels (module)"
+    ]
+  },
+  "alert_rules": {
+    "table": "\nCREATE TABLE alert_rules (\n\tid UUID NOT NULL, \n\tcode VARCHAR(100) NOT NULL, \n\tservice_monitor_id UUID, \n\tserver_id UUID, \n\tllm_endpoint_id UUID, \n\tprediction_task_id UUID, \n\tprediction_horizon_hours INTEGER, \n\tmetric VARCHAR(50) NOT NULL, \n\tthreshold FLOAT NOT NULL, \n\tfor_seconds INTEGER NOT NULL, \n\tseverity VARCHAR(20) NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tauto_diagnose BOOLEAN, \n\tauto_diagnose_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_alert_rules PRIMARY KEY (id), \n\tCONSTRAINT uq_alert_rules_code UNIQUE (code), \n\tCONSTRAINT fk_alert_rules_service_monitor_id_service_monitors FOREIGN KEY(service_monitor_id) REFERENCES service_monitors (id), \n\tCONSTRAINT fk_alert_rules_server_id_servers FOREIGN KEY(server_id) REFERENCES servers (id), \n\tCONSTRAINT fk_alert_rules_llm_endpoint_id_llm_endpoints FOREIGN KEY(llm_endpoint_id) REFERENCES llm_endpoints (id), \n\tCONSTRAINT fk_alert_rules_prediction_task_id_prediction_tasks FOREIGN KEY(prediction_task_id) REFERENCES prediction_tasks (id), \n\tCONSTRAINT fk_alert_rules_auto_diagnose_by_users FOREIGN KEY(auto_diagnose_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "alert_events": {
+    "table": "\nCREATE TABLE alert_events (\n\tid UUID NOT NULL, \n\tfingerprint VARCHAR(64) NOT NULL, \n\trule_id UUID, \n\tservice_monitor_id UUID, \n\tserver_id UUID, \n\tllm_endpoint_id UUID, \n\tprediction_task_id UUID, \n\tseverity VARCHAR(20) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tstarts_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tends_at TIMESTAMP WITH TIME ZONE, \n\tlabels JSON NOT NULL, \n\tannotations JSON NOT NULL, \n\trule_snapshot JSON DEFAULT '{}' NOT NULL, \n\trecovery_status VARCHAR(20) DEFAULT 'pending' NOT NULL, \n\trecovery_reason VARCHAR(100), \n\trecovery_checked_at TIMESTAMP WITH TIME ZONE, \n\trecovery_evidence_at TIMESTAMP WITH TIME ZONE, \n\tstability_started_at TIMESTAMP WITH TIME ZONE, \n\tstability_last_evidence_at TIMESTAMP WITH TIME ZONE, \n\tacknowledged_at TIMESTAMP WITH TIME ZONE, \n\tacknowledged_by UUID, \n\tcomment VARCHAR(2000), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_alert_events PRIMARY KEY (id), \n\tCONSTRAINT uq_alert_events_fingerprint UNIQUE (fingerprint, starts_at), \n\tCONSTRAINT fk_alert_events_rule_id_alert_rules FOREIGN KEY(rule_id) REFERENCES alert_rules (id), \n\tCONSTRAINT fk_alert_events_service_monitor_id_service_monitors FOREIGN KEY(service_monitor_id) REFERENCES service_monitors (id), \n\tCONSTRAINT fk_alert_events_server_id_servers FOREIGN KEY(server_id) REFERENCES servers (id), \n\tCONSTRAINT fk_alert_events_llm_endpoint_id_llm_endpoints FOREIGN KEY(llm_endpoint_id) REFERENCES llm_endpoints (id), \n\tCONSTRAINT fk_alert_events_prediction_task_id_prediction_tasks FOREIGN KEY(prediction_task_id) REFERENCES prediction_tasks (id), \n\tCONSTRAINT fk_alert_events_acknowledged_by_users FOREIGN KEY(acknowledged_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_alert_events_llm_endpoint_id ON alert_events (llm_endpoint_id)",
+      "CREATE INDEX ix_alert_events_prediction_task_id ON alert_events (prediction_task_id)",
+      "CREATE INDEX ix_alert_events_recovery_pending ON alert_events (recovery_checked_at) WHERE status = 'resolved' AND recovery_status = 'pending' AND deleted_at IS NULL",
+      "CREATE INDEX ix_alert_events_server_id ON alert_events (server_id)",
+      "CREATE INDEX ix_alert_events_service_monitor_id ON alert_events (service_monitor_id)"
+    ]
+  },
+  "configurations": {
+    "table": "\nCREATE TABLE askdata.configurations (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tversion INTEGER NOT NULL, \n\tactive_model_version_id UUID, \n\tbudget_seconds INTEGER NOT NULL, \n\treasoning_channel_id UUID, \n\tlight_channel_id UUID, \n\tvector_model VARCHAR(120) NOT NULL, \n\tvector_dimension INTEGER NOT NULL, \n\treranker_enabled BOOLEAN NOT NULL, \n\treranker_endpoint VARCHAR(300) NOT NULL, \n\treranker_model VARCHAR(120) NOT NULL, \n\treranker_key_encrypted TEXT, \n\treranker_verified_at TIMESTAMP WITH TIME ZONE, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_configurations PRIMARY KEY (id), \n\tCONSTRAINT uq_configurations_connection_id UNIQUE (connection_id), \n\tCONSTRAINT fk_configurations_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_configurations_active_model_version_id_model_versions FOREIGN KEY(active_model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT fk_configurations_reasoning_channel_id_agent_channels FOREIGN KEY(reasoning_channel_id) REFERENCES agent_channels (id), \n\tCONSTRAINT fk_configurations_light_channel_id_agent_channels FOREIGN KEY(light_channel_id) REFERENCES agent_channels (id), \n\tCONSTRAINT fk_configurations_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "model_versions": {
+    "table": "\nCREATE TABLE askdata.model_versions (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tsource_snapshot_id UUID, \n\tcreated_by UUID NOT NULL, \n\tconfig_version INTEGER NOT NULL, \n\tschema_hash VARCHAR(64) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tcontext JSON NOT NULL, \n\tvector_signature VARCHAR(140) NOT NULL, \n\tpublished_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_model_versions PRIMARY KEY (id), \n\tCONSTRAINT uq_model_versions_connection_id UNIQUE (connection_id, id), \n\tCONSTRAINT ck_model_versions_status CHECK (status IN ('draft','ready','failed','retired')), \n\tCONSTRAINT fk_model_versions_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_model_versions_source_snapshot_id_source_snapshots FOREIGN KEY(source_snapshot_id) REFERENCES source_snapshots (id), \n\tCONSTRAINT fk_model_versions_created_by_users FOREIGN KEY(created_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_model_versions_connection_id ON askdata.model_versions (connection_id)"
+    ]
+  },
+  "builds": {
+    "table": "\nCREATE TABLE askdata.builds (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tstep VARCHAR(100) NOT NULL, \n\terror_code VARCHAR(100), \n\tdetail JSON NOT NULL, \n\tcancel_requested BOOLEAN NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_builds PRIMARY KEY (id), \n\tCONSTRAINT fk_builds_connection_id_model_versions FOREIGN KEY(connection_id, model_version_id) REFERENCES askdata.model_versions (connection_id, id), \n\tCONSTRAINT ck_builds_status CHECK (status IN ('queued','running','completed','failed','cancelled','interrupted')), \n\tCONSTRAINT fk_builds_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_builds_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_builds_connection_id ON askdata.builds (connection_id)"
+    ]
+  },
+  "conversations": {
+    "table": "\nCREATE TABLE askdata.conversations (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\towner_id UUID NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_conversations PRIMARY KEY (id), \n\tCONSTRAINT uq_conversations_connection_id UNIQUE (connection_id, id), \n\tCONSTRAINT fk_conversations_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_conversations_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_conversations_connection_id ON askdata.conversations (connection_id)",
+      "CREATE INDEX ix_conversations_owner_id ON askdata.conversations (owner_id)"
+    ]
+  },
+  "runs": {
+    "table": "\nCREATE TABLE askdata.runs (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tconversation_id UUID NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tidempotency_key UUID NOT NULL, \n\tstatus VARCHAR(30) NOT NULL, \n\tquestion TEXT NOT NULL, \n\tresult JSON NOT NULL, \n\terror_code VARCHAR(100), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_runs PRIMARY KEY (id), \n\tCONSTRAINT fk_runs_connection_id_conversations FOREIGN KEY(connection_id, conversation_id) REFERENCES askdata.conversations (connection_id, id), \n\tCONSTRAINT fk_runs_connection_id_model_versions FOREIGN KEY(connection_id, model_version_id) REFERENCES askdata.model_versions (connection_id, id), \n\tCONSTRAINT uq_runs_conversation_id UNIQUE (conversation_id, idempotency_key), \n\tCONSTRAINT ck_runs_status CHECK (status IN ('queued','running','completed','needs_clarification','failed','cancelled','interrupted')), \n\tCONSTRAINT fk_runs_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_runs_connection_id ON askdata.runs (connection_id)",
+      "CREATE INDEX ix_runs_conversation_id ON askdata.runs (conversation_id)"
+    ]
+  },
+  "events": {
+    "table": "\nCREATE TABLE askdata.events (\n\tid UUID NOT NULL, \n\trun_id UUID NOT NULL, \n\tseq INTEGER NOT NULL, \n\tkind VARCHAR(50) NOT NULL, \n\tdata JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_events PRIMARY KEY (id), \n\tCONSTRAINT uq_events_run_id UNIQUE (run_id, seq), \n\tCONSTRAINT fk_events_run_id_runs FOREIGN KEY(run_id) REFERENCES askdata.runs (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_events_run_id ON askdata.events (run_id)"
+    ]
+  },
+  "embeddings": {
+    "table": "\nCREATE TABLE askdata.embeddings (\n\tid UUID NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcollection VARCHAR(20) NOT NULL, \n\tpath VARCHAR(500) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tmeta JSONB NOT NULL, \n\tembedding VECTOR(512) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_embeddings PRIMARY KEY (id), \n\tCONSTRAINT uq_embeddings_model_version_id UNIQUE (model_version_id, collection, path), \n\tCONSTRAINT ck_embeddings_collection CHECK (collection IN ('semantic','data')), \n\tCONSTRAINT fk_embeddings_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_askdata_embeddings_vector ON askdata.embeddings USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)",
+      "CREATE INDEX ix_embeddings_model_version_id ON askdata.embeddings (model_version_id)"
+    ]
+  },
+  "analysis": {
+    "table": "\nCREATE TABLE askdata.analysis (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analysis PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_analysis_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "catalog_database": {
+    "table": "\nCREATE TABLE askdata.catalog_database (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tconnection JSONB, \n\tdialect TEXT, \n\tdescription TEXT, \n\tdescription_certified BOOLEAN DEFAULT false NOT NULL, \n\timported_id TEXT, \n\towner_id TEXT, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now(), \n\tpulled TIMESTAMP WITH TIME ZONE, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_catalog_database PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT uq_catalog_database_name UNIQUE (model_version_id, name), \n\tCONSTRAINT fk_catalog_database_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT ck_catalog_database_no_credentials CHECK (connection IS NULL)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_catalog_database_description_trgm ON askdata.catalog_database USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_database_imported_id ON askdata.catalog_database (imported_id)",
+      "CREATE INDEX ix_catalog_database_name_trgm ON askdata.catalog_database USING gin (name gin_trgm_ops)"
+    ]
+  },
+  "column_attribute": {
+    "table": "\nCREATE TABLE askdata.column_attribute (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tdatatype TEXT, \n\tsource TEXT DEFAULT 'semantic' NOT NULL, \n\tsource_column TEXT NOT NULL, \n\tterm_name TEXT NOT NULL, \n\ttable_id TEXT NOT NULL, \n\tcertified BOOLEAN DEFAULT false NOT NULL, \n\tdescription_suggestion TEXT, \n\tpii_processed BOOLEAN DEFAULT false NOT NULL, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now(), \n\tmodified TIMESTAMP WITH TIME ZONE, \n\tcreated_by TEXT, \n\tmodified_by TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column_attribute PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT uq_column_attribute_merge_key UNIQUE (model_version_id, name, source_column, term_name, table_id, source), \n\tCONSTRAINT fk_column_attribute_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_column_attribute_description_trgm ON askdata.column_attribute USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_column_attribute_imported_id ON askdata.column_attribute (imported_id)",
+      "CREATE INDEX ix_column_attribute_name_trgm ON askdata.column_attribute USING gin (name gin_trgm_ops)",
+      "CREATE INDEX ix_column_attribute_table_id ON askdata.column_attribute (table_id)",
+      "CREATE INDEX ix_column_attribute_term_name ON askdata.column_attribute (term_name)"
+    ]
+  },
+  "custom_analysis": {
+    "table": "\nCREATE TABLE askdata.custom_analysis (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_custom_analysis PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT uq_custom_analysis_name UNIQUE (model_version_id, name), \n\tCONSTRAINT fk_custom_analysis_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_custom_analysis_description_trgm ON askdata.custom_analysis USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_custom_analysis_imported_id ON askdata.custom_analysis (imported_id)",
+      "CREATE INDEX ix_custom_analysis_name_trgm ON askdata.custom_analysis USING gin (name gin_trgm_ops)"
+    ]
+  },
+  "rule": {
+    "table": "\nCREATE TABLE askdata.rule (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tsearch_term TEXT NOT NULL, \n\ttext_match_option TEXT DEFAULT 'contains' NOT NULL, \n\tfilters JSONB DEFAULT '{}'::jsonb NOT NULL, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tmodified TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tcreated_by TEXT NOT NULL, \n\tmodified_by TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_rule PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_rule_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_rule_name_lower ON askdata.rule (lower(name))",
+      "CREATE UNIQUE INDEX uq_rule_name_lower ON askdata.rule (model_version_id, lower(TRIM(BOTH FROM name)))"
+    ]
+  },
+  "semantic_compilation_history": {
+    "table": "\nCREATE TABLE askdata.semantic_compilation_history (\n\tid BIGSERIAL NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tstatus TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_semantic_compilation_history PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT ck_semantic_compilation_history_status_value CHECK (status IS NULL OR status IN ('succeeded', 'failed')), \n\tCONSTRAINT fk_semantic_compilation_history_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "sql_attribute": {
+    "table": "\nCREATE TABLE askdata.sql_attribute (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\texpression TEXT, \n\tsource TEXT, \n\tcertified BOOLEAN DEFAULT false NOT NULL, \n\towner_id TEXT, \n\tdescription_suggestion TEXT, \n\tpii_processed BOOLEAN DEFAULT false NOT NULL, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now(), \n\tmodified TIMESTAMP WITH TIME ZONE, \n\tcreated_by TEXT, \n\tmodified_by TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_attribute PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT ck_sql_attribute_source_value CHECK (source IS NULL OR source IN ('manual', 'sql', 'table', 'bridgeTable')), \n\tCONSTRAINT uq_sql_attribute_name UNIQUE (model_version_id, name), \n\tCONSTRAINT fk_sql_attribute_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_sql_attribute_description_trgm ON askdata.sql_attribute USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_sql_attribute_imported_id ON askdata.sql_attribute (imported_id)",
+      "CREATE INDEX ix_sql_attribute_name_trgm ON askdata.sql_attribute USING gin (name gin_trgm_ops)"
+    ]
+  },
+  "sql_query": {
+    "table": "\nCREATE TABLE askdata.sql_query (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tsql_full_query TEXT NOT NULL, \n\tquery_count INTEGER DEFAULT 0 NOT NULL, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now(), \n\tlast_seen TIMESTAMP WITH TIME ZONE, \n\ttotal_counter INTEGER DEFAULT 0 NOT NULL, \n\tlast_query_timestamp TIMESTAMP WITH TIME ZONE, \n\tnodes_count INTEGER, \n\tjoin_count INTEGER DEFAULT 0 NOT NULL, \n\tunion_count INTEGER DEFAULT 0 NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_query PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_sql_query_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE UNIQUE INDEX uq_sql_query_text_md5 ON askdata.sql_query (model_version_id, md5(sql_full_query))"
+    ]
+  },
+  "tag": {
+    "table": "\nCREATE TABLE askdata.tag (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tmodified TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tcreated_by TEXT, \n\tmodified_by TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_tag PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_tag_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_tag_name_trgm ON askdata.tag USING gin (name gin_trgm_ops)",
+      "CREATE UNIQUE INDEX uq_tag_name_lower ON askdata.tag (model_version_id, lower(TRIM(BOTH FROM name)))"
+    ]
+  },
+  "term": {
+    "table": "\nCREATE TABLE askdata.term (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tsource TEXT DEFAULT 'semantic' NOT NULL, \n\tsynonyms TEXT[], \n\tname_certified BOOLEAN DEFAULT false NOT NULL, \n\tdescription_certified BOOLEAN DEFAULT false NOT NULL, \n\towner_id TEXT, \n\tcreated TIMESTAMP WITH TIME ZONE DEFAULT now(), \n\tmodified TIMESTAMP WITH TIME ZONE, \n\tcreated_by TEXT, \n\tmodified_by TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_term PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT uq_term_name_source UNIQUE (model_version_id, name, source), \n\tCONSTRAINT fk_term_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_term_description_trgm ON askdata.term USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_term_imported_id ON askdata.term (imported_id)",
+      "CREATE INDEX ix_term_name ON askdata.term (name)",
+      "CREATE INDEX ix_term_name_trgm ON askdata.term USING gin (name gin_trgm_ops)"
+    ]
+  },
+  "text_attribute": {
+    "table": "\nCREATE TABLE askdata.text_attribute (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_text_attribute PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_text_attribute_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "zone": {
+    "table": "\nCREATE TABLE askdata.zone (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tcolor TEXT, \n\tenabled BOOLEAN DEFAULT true NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_zone PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_zone_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_zone_name_lower ON askdata.zone (lower(name))"
+    ]
+  },
+  "catalog_schema": {
+    "table": "\nCREATE TABLE askdata.catalog_schema (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tdatabase_id TEXT NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tdescription_certified BOOLEAN DEFAULT false NOT NULL, \n\timported_id TEXT, \n\towner_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_catalog_schema PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT uq_catalog_schema_database_name UNIQUE (model_version_id, database_id, name), \n\tCONSTRAINT fk_catalog_schema_database_id_catalog_database FOREIGN KEY(model_version_id, database_id) REFERENCES askdata.catalog_database (model_version_id, id), \n\tCONSTRAINT fk_catalog_schema_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_catalog_schema_database_id ON askdata.catalog_schema (database_id)",
+      "CREATE INDEX ix_catalog_schema_description_trgm ON askdata.catalog_schema USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_schema_imported_id ON askdata.catalog_schema (imported_id)",
+      "CREATE INDEX ix_catalog_schema_name_trgm ON askdata.catalog_schema USING gin (name gin_trgm_ops)"
+    ]
+  },
+  "column_attribute__term": {
+    "table": "\nCREATE TABLE askdata.column_attribute__term (\n\tattribute_id TEXT NOT NULL, \n\tterm_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column_attribute__term PRIMARY KEY (model_version_id, attribute_id, term_id), \n\tCONSTRAINT uq_column_attribute__term_attribute_id UNIQUE (model_version_id, attribute_id), \n\tCONSTRAINT fk_column_attribute__term_term_id_term FOREIGN KEY(model_version_id, term_id) REFERENCES askdata.term (model_version_id, id), \n\tCONSTRAINT fk_column_attribute__term_attribute_id_column_attribute FOREIGN KEY(model_version_id, attribute_id) REFERENCES askdata.column_attribute (model_version_id, id), \n\tCONSTRAINT fk_column_attribute__term_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_column_attribute__term_term_id ON askdata.column_attribute__term (term_id)"
+    ]
+  },
+  "custom_analysis__sql": {
+    "table": "\nCREATE TABLE askdata.custom_analysis__sql (\n\tanalysis_id TEXT NOT NULL, \n\tsql_query_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_custom_analysis__sql PRIMARY KEY (model_version_id, analysis_id, sql_query_id), \n\tCONSTRAINT fk_custom_analysis__sql_analysis_id_custom_analysis FOREIGN KEY(model_version_id, analysis_id) REFERENCES askdata.custom_analysis (model_version_id, id), \n\tCONSTRAINT fk_custom_analysis__sql_sql_query_id_sql_query FOREIGN KEY(model_version_id, sql_query_id) REFERENCES askdata.sql_query (model_version_id, id), \n\tCONSTRAINT fk_custom_analysis__sql_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "rule__tag": {
+    "table": "\nCREATE TABLE askdata.rule__tag (\n\trule_id TEXT NOT NULL, \n\ttag_id TEXT NOT NULL, \n\tposition INTEGER NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_rule__tag PRIMARY KEY (model_version_id, rule_id, tag_id), \n\tCONSTRAINT fk_rule__tag_tag_id_tag FOREIGN KEY(model_version_id, tag_id) REFERENCES askdata.tag (model_version_id, id), \n\tCONSTRAINT fk_rule__tag_rule_id_rule FOREIGN KEY(model_version_id, rule_id) REFERENCES askdata.rule (model_version_id, id), \n\tCONSTRAINT fk_rule__tag_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_rule__tag_tag_id ON askdata.rule__tag (tag_id)"
+    ]
+  },
+  "sql_attribute__sql": {
+    "table": "\nCREATE TABLE askdata.sql_attribute__sql (\n\tattribute_id TEXT NOT NULL, \n\tsql_query_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_attribute__sql PRIMARY KEY (model_version_id, attribute_id, sql_query_id), \n\tCONSTRAINT fk_sql_attribute__sql_sql_query_id_sql_query FOREIGN KEY(model_version_id, sql_query_id) REFERENCES askdata.sql_query (model_version_id, id), \n\tCONSTRAINT fk_sql_attribute__sql_attribute_id_sql_attribute FOREIGN KEY(model_version_id, attribute_id) REFERENCES askdata.sql_attribute (model_version_id, id), \n\tCONSTRAINT fk_sql_attribute__sql_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "sql_attribute__term": {
+    "table": "\nCREATE TABLE askdata.sql_attribute__term (\n\tattribute_id TEXT NOT NULL, \n\tterm_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_attribute__term PRIMARY KEY (model_version_id, attribute_id, term_id), \n\tCONSTRAINT uq_sql_attribute__term_attribute_id UNIQUE (model_version_id, attribute_id), \n\tCONSTRAINT fk_sql_attribute__term_attribute_id_sql_attribute FOREIGN KEY(model_version_id, attribute_id) REFERENCES askdata.sql_attribute (model_version_id, id), \n\tCONSTRAINT fk_sql_attribute__term_term_id_term FOREIGN KEY(model_version_id, term_id) REFERENCES askdata.term (model_version_id, id), \n\tCONSTRAINT fk_sql_attribute__term_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_sql_attribute__term_term_id ON askdata.sql_attribute__term (term_id)"
+    ]
+  },
+  "catalog_table": {
+    "table": "\nCREATE TABLE askdata.catalog_table (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tschema_id TEXT NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tdescription_certified BOOLEAN DEFAULT false NOT NULL, \n\towner_id TEXT, \n\tpk TEXT[], \n\ttable_type TEXT, \n\tis_junction_table BOOLEAN DEFAULT false NOT NULL, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_catalog_table PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_catalog_table_schema_id_catalog_schema FOREIGN KEY(model_version_id, schema_id) REFERENCES askdata.catalog_schema (model_version_id, id), \n\tCONSTRAINT uq_catalog_table_schema_name UNIQUE (model_version_id, schema_id, name), \n\tCONSTRAINT fk_catalog_table_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_catalog_table_description_trgm ON askdata.catalog_table USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_table_imported_id ON askdata.catalog_table (imported_id)",
+      "CREATE INDEX ix_catalog_table_name ON askdata.catalog_table (name)",
+      "CREATE INDEX ix_catalog_table_name_trgm ON askdata.catalog_table USING gin (name gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_table_schema_id ON askdata.catalog_table (schema_id)"
+    ]
+  },
+  "catalog_column": {
+    "table": "\nCREATE TABLE askdata.catalog_column (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\ttable_id TEXT NOT NULL, \n\tname TEXT NOT NULL, \n\tdescription TEXT, \n\tdescription_certified BOOLEAN DEFAULT false NOT NULL, \n\tdata_type TEXT, \n\tsample_values TEXT, \n\tformat TEXT, \n\tis_unique BOOLEAN, \n\tis_nullable BOOLEAN, \n\tordinal_position INTEGER, \n\tpii_processed BOOLEAN DEFAULT false NOT NULL, \n\timported_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_catalog_column PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT fk_catalog_column_table_id_catalog_table FOREIGN KEY(model_version_id, table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT uq_catalog_column_table_name UNIQUE (model_version_id, table_id, name), \n\tCONSTRAINT fk_catalog_column_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_catalog_column_description_trgm ON askdata.catalog_column USING gin (description gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_column_imported_id ON askdata.catalog_column (imported_id)",
+      "CREATE INDEX ix_catalog_column_name ON askdata.catalog_column (name)",
+      "CREATE INDEX ix_catalog_column_name_trgm ON askdata.catalog_column USING gin (name gin_trgm_ops)",
+      "CREATE INDEX ix_catalog_column_table_id ON askdata.catalog_column (table_id)"
+    ]
+  },
+  "sql_query__table": {
+    "table": "\nCREATE TABLE askdata.sql_query__table (\n\tsql_query_id TEXT NOT NULL, \n\ttable_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_query__table PRIMARY KEY (model_version_id, sql_query_id, table_id), \n\tCONSTRAINT fk_sql_query__table_table_id_catalog_table FOREIGN KEY(model_version_id, table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_sql_query__table_sql_query_id_sql_query FOREIGN KEY(model_version_id, sql_query_id) REFERENCES askdata.sql_query (model_version_id, id), \n\tCONSTRAINT fk_sql_query__table_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_sql_query__table_table_id ON askdata.sql_query__table (table_id)"
+    ]
+  },
+  "table__join": {
+    "table": "\nCREATE TABLE askdata.table__join (\n\tsource_table_id TEXT NOT NULL, \n\ttarget_table_id TEXT NOT NULL, \n\tjoin_columns JSONB, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_table__join PRIMARY KEY (model_version_id, source_table_id, target_table_id), \n\tCONSTRAINT fk_table__join_target_table_id_catalog_table FOREIGN KEY(model_version_id, target_table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_table__join_source_table_id_catalog_table FOREIGN KEY(model_version_id, source_table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_table__join_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_table__join_target ON askdata.table__join (target_table_id)"
+    ]
+  },
+  "table__term": {
+    "table": "\nCREATE TABLE askdata.table__term (\n\ttable_id TEXT NOT NULL, \n\tterm_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_table__term PRIMARY KEY (model_version_id, table_id, term_id), \n\tCONSTRAINT fk_table__term_term_id_term FOREIGN KEY(model_version_id, term_id) REFERENCES askdata.term (model_version_id, id), \n\tCONSTRAINT fk_table__term_table_id_catalog_table FOREIGN KEY(model_version_id, table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_table__term_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_table__term_term_id ON askdata.table__term (term_id)"
+    ]
+  },
+  "zone_target": {
+    "table": "\nCREATE TABLE askdata.zone_target (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\tzone_id TEXT NOT NULL, \n\tdatabase_id TEXT, \n\tschema_id TEXT, \n\ttable_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_zone_target PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT ck_zone_target_exactly_one_target CHECK (num_nonnulls(database_id, schema_id, table_id) = 1), \n\tCONSTRAINT fk_zone_target_zone_id_zone FOREIGN KEY(model_version_id, zone_id) REFERENCES askdata.zone (model_version_id, id), \n\tCONSTRAINT fk_zone_target_database_id_catalog_database FOREIGN KEY(model_version_id, database_id) REFERENCES askdata.catalog_database (model_version_id, id), \n\tCONSTRAINT fk_zone_target_table_id_catalog_table FOREIGN KEY(model_version_id, table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_zone_target_schema_id_catalog_schema FOREIGN KEY(model_version_id, schema_id) REFERENCES askdata.catalog_schema (model_version_id, id), \n\tCONSTRAINT fk_zone_target_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_zone_target_database_id ON askdata.zone_target (database_id)",
+      "CREATE INDEX ix_zone_target_schema_id ON askdata.zone_target (schema_id)",
+      "CREATE INDEX ix_zone_target_table_id ON askdata.zone_target (table_id)",
+      "CREATE INDEX ix_zone_target_zone_id ON askdata.zone_target (zone_id)"
+    ]
+  },
+  "column__foreign_key": {
+    "table": "\nCREATE TABLE askdata.column__foreign_key (\n\tsource_column_id TEXT NOT NULL, \n\ttarget_column_id TEXT NOT NULL, \n\tlast_seen TIMESTAMP WITH TIME ZONE, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column__foreign_key PRIMARY KEY (model_version_id, source_column_id, target_column_id), \n\tCONSTRAINT fk_column__foreign_key_source_column_id_catalog_column FOREIGN KEY(model_version_id, source_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__foreign_key_target_column_id_catalog_column FOREIGN KEY(model_version_id, target_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__foreign_key_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_column__foreign_key_target ON askdata.column__foreign_key (target_column_id)"
+    ]
+  },
+  "column__has_attribute": {
+    "table": "\nCREATE TABLE askdata.column__has_attribute (\n\tcolumn_id TEXT NOT NULL, \n\tattribute_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column__has_attribute PRIMARY KEY (model_version_id, column_id, attribute_id), \n\tCONSTRAINT fk_column__has_attribute_column_id_catalog_column FOREIGN KEY(model_version_id, column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__has_attribute_attribute_id_column_attribute FOREIGN KEY(model_version_id, attribute_id) REFERENCES askdata.column_attribute (model_version_id, id), \n\tCONSTRAINT fk_column__has_attribute_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_column__has_attribute_attribute_id ON askdata.column__has_attribute (attribute_id)"
+    ]
+  },
+  "column__join": {
+    "table": "\nCREATE TABLE askdata.column__join (\n\tsource_column_id TEXT NOT NULL, \n\ttarget_column_id TEXT NOT NULL, \n\trefs TEXT[] DEFAULT '{}' NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column__join PRIMARY KEY (model_version_id, source_column_id, target_column_id), \n\tCONSTRAINT fk_column__join_target_column_id_catalog_column FOREIGN KEY(model_version_id, target_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__join_source_column_id_catalog_column FOREIGN KEY(model_version_id, source_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__join_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "column__semantic_fk": {
+    "table": "\nCREATE TABLE askdata.column__semantic_fk (\n\tcolumn_id TEXT NOT NULL, \n\tattribute_id TEXT NOT NULL, \n\tuse_in_join_paths BOOLEAN DEFAULT true NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column__semantic_fk PRIMARY KEY (model_version_id, column_id, attribute_id), \n\tCONSTRAINT fk_column__semantic_fk_attribute_id_column_attribute FOREIGN KEY(model_version_id, attribute_id) REFERENCES askdata.column_attribute (model_version_id, id), \n\tCONSTRAINT fk_column__semantic_fk_column_id_catalog_column FOREIGN KEY(model_version_id, column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__semantic_fk_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_column__semantic_fk_attribute_id ON askdata.column__semantic_fk (attribute_id)"
+    ]
+  },
+  "column__union": {
+    "table": "\nCREATE TABLE askdata.column__union (\n\tsource_column_id TEXT NOT NULL, \n\ttarget_column_id TEXT NOT NULL, \n\trefs TEXT[] DEFAULT '{}' NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_column__union PRIMARY KEY (model_version_id, source_column_id, target_column_id), \n\tCONSTRAINT fk_column__union_source_column_id_catalog_column FOREIGN KEY(model_version_id, source_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__union_target_column_id_catalog_column FOREIGN KEY(model_version_id, target_column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_column__union_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": []
+  },
+  "sql_query__column": {
+    "table": "\nCREATE TABLE askdata.sql_query__column (\n\tsql_query_id TEXT NOT NULL, \n\tcolumn_id TEXT NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sql_query__column PRIMARY KEY (model_version_id, sql_query_id, column_id), \n\tCONSTRAINT fk_sql_query__column_column_id_catalog_column FOREIGN KEY(model_version_id, column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT fk_sql_query__column_sql_query_id_sql_query FOREIGN KEY(model_version_id, sql_query_id) REFERENCES askdata.sql_query (model_version_id, id), \n\tCONSTRAINT fk_sql_query__column_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_sql_query__column_column_id ON askdata.sql_query__column (column_id)"
+    ]
+  },
+  "tag_target": {
+    "table": "\nCREATE TABLE askdata.tag_target (\n\tid TEXT DEFAULT (gen_random_uuid())::text NOT NULL, \n\ttag_id TEXT NOT NULL, \n\tterm_id TEXT, \n\ttable_id TEXT, \n\tcolumn_id TEXT, \n\tcolumn_attribute_id TEXT, \n\tsql_attribute_id TEXT, \n\ttagged TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\ttagged_by TEXT, \n\trule_id TEXT, \n\tmodel_version_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_tag_target PRIMARY KEY (model_version_id, id), \n\tCONSTRAINT ck_tag_target_exactly_one_target CHECK (num_nonnulls(term_id, table_id, column_id, column_attribute_id, sql_attribute_id) = 1), \n\tCONSTRAINT fk_tag_target_column_attribute_id_column_attribute FOREIGN KEY(model_version_id, column_attribute_id) REFERENCES askdata.column_attribute (model_version_id, id), \n\tCONSTRAINT uq_tag_target_tag_id_column_attribute_id UNIQUE (model_version_id, tag_id, column_attribute_id), \n\tCONSTRAINT uq_tag_target_tag_id_term_id UNIQUE (model_version_id, tag_id, term_id), \n\tCONSTRAINT fk_tag_target_rule_id_rule FOREIGN KEY(model_version_id, rule_id) REFERENCES askdata.rule (model_version_id, id), \n\tCONSTRAINT fk_tag_target_sql_attribute_id_sql_attribute FOREIGN KEY(model_version_id, sql_attribute_id) REFERENCES askdata.sql_attribute (model_version_id, id), \n\tCONSTRAINT fk_tag_target_term_id_term FOREIGN KEY(model_version_id, term_id) REFERENCES askdata.term (model_version_id, id), \n\tCONSTRAINT uq_tag_target_tag_id_sql_attribute_id UNIQUE (model_version_id, tag_id, sql_attribute_id), \n\tCONSTRAINT fk_tag_target_tag_id_tag FOREIGN KEY(model_version_id, tag_id) REFERENCES askdata.tag (model_version_id, id), \n\tCONSTRAINT fk_tag_target_table_id_catalog_table FOREIGN KEY(model_version_id, table_id) REFERENCES askdata.catalog_table (model_version_id, id), \n\tCONSTRAINT fk_tag_target_column_id_catalog_column FOREIGN KEY(model_version_id, column_id) REFERENCES askdata.catalog_column (model_version_id, id), \n\tCONSTRAINT uq_tag_target_tag_id_table_id UNIQUE (model_version_id, tag_id, table_id), \n\tCONSTRAINT uq_tag_target_tag_id_column_id UNIQUE (model_version_id, tag_id, column_id), \n\tCONSTRAINT fk_tag_target_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_tag_target_column_attribute_id ON askdata.tag_target (column_attribute_id)",
+      "CREATE INDEX ix_tag_target_column_id ON askdata.tag_target (column_id)",
+      "CREATE INDEX ix_tag_target_rule_id ON askdata.tag_target (rule_id)",
+      "CREATE INDEX ix_tag_target_sql_attribute_id ON askdata.tag_target (sql_attribute_id)",
+      "CREATE INDEX ix_tag_target_table_id ON askdata.tag_target (table_id)",
+      "CREATE INDEX ix_tag_target_term_id ON askdata.tag_target (term_id)"
+    ]
+  },
+  "definitions": {
+    "table": "\nCREATE TABLE askdata.definitions (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tobject_kind VARCHAR(20) NOT NULL, \n\tobject_key VARCHAR(300) NOT NULL, \n\tobject_id VARCHAR(100), \n\tpayload JSONB NOT NULL, \n\tcertified BOOLEAN NOT NULL, \n\tedited_by UUID, \n\tsource_fingerprint VARCHAR(200) NOT NULL, \n\treview_required BOOLEAN NOT NULL, \n\treview_note VARCHAR(300) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_definitions PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_definitions_object UNIQUE (model_version_id, object_kind, object_key), \n\tCONSTRAINT ck_definitions_ck_askdata_definitions_kind CHECK (object_kind IN ('term','attribute','metric')), \n\tCONSTRAINT fk_definitions_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_definitions_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT fk_definitions_edited_by_users FOREIGN KEY(edited_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_askdata_definitions_review ON askdata.definitions (connection_id, review_required)",
+      "CREATE INDEX ix_definitions_connection_id ON askdata.definitions (connection_id)",
+      "CREATE INDEX ix_definitions_model_version_id ON askdata.definitions (model_version_id)"
+    ]
+  },
+  "roles": {
+    "table": "\nCREATE TABLE roles (\n\tid UUID NOT NULL, \n\tcode VARCHAR(20) NOT NULL, \n\tname VARCHAR(50) NOT NULL, \n\tpermissions_version INTEGER DEFAULT '1' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_roles PRIMARY KEY (id), \n\tCONSTRAINT uq_roles_code UNIQUE (code)\n)\n\n",
+    "indexes": []
+  },
+  "users": {
+    "table": "\nCREATE TABLE users (\n\tid UUID NOT NULL, \n\tusername VARCHAR(64) NOT NULL, \n\tpassword_hash VARCHAR(255) NOT NULL, \n\trole_id UUID NOT NULL, \n\tis_active BOOLEAN DEFAULT 'true' NOT NULL, \n\tlast_login_at TIMESTAMP WITH TIME ZONE, \n\tnotification_email VARCHAR(254) DEFAULT '' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_users PRIMARY KEY (id), \n\tCONSTRAINT uq_users_username UNIQUE (username), \n\tCONSTRAINT fk_users_role_id_roles FOREIGN KEY(role_id) REFERENCES roles (id)\n)\n\n",
+    "indexes": []
+  },
+  "auth_sessions": {
+    "table": "\nCREATE TABLE auth_sessions (\n\tid UUID NOT NULL, \n\tuser_id UUID NOT NULL, \n\trefresh_jti_hash VARCHAR(64) NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\trevoked_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_auth_sessions PRIMARY KEY (id), \n\tCONSTRAINT fk_auth_sessions_user_id_users FOREIGN KEY(user_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_auth_sessions_user_id ON auth_sessions (user_id)"
+    ]
+  },
+  "diagnosis_policy": {
+    "table": "\nCREATE TABLE diagnosis_policy (\n\tid INTEGER NOT NULL, \n\tenabled BOOLEAN DEFAULT 'false' NOT NULL, \n\tconfigured_by UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_diagnosis_policy PRIMARY KEY (id), \n\tCONSTRAINT ck_diagnosis_policy_singleton CHECK (id = 1), \n\tCONSTRAINT fk_diagnosis_policy_configured_by_users FOREIGN KEY(configured_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "agent_analyses": {
+    "table": "\nCREATE TABLE agent_analyses (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\ttrigger VARCHAR(20) DEFAULT 'manual' NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tinput_hash VARCHAR(64) NOT NULL, \n\tconfig JSON NOT NULL, \n\tsource_context JSON DEFAULT '{}' NOT NULL, \n\tdatabase_context JSON DEFAULT '{}' NOT NULL, \n\tsession_id VARCHAR(100), \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\tevidence JSON NOT NULL, \n\tknowledge JSON NOT NULL, \n\ttool_calls JSON NOT NULL, \n\tresult JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_agent_analyses PRIMARY KEY (id), \n\tCONSTRAINT ck_agent_analyses_trigger CHECK (trigger IN ('manual','automatic')), \n\tCONSTRAINT ck_agent_analyses_status CHECK (status IN ('queued','running','completed','failed','interrupted')), \n\tCONSTRAINT fk_agent_analyses_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_agent_analyses_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_agent_analyses_incident_id ON agent_analyses (incident_id)",
+      "CREATE UNIQUE INDEX uq_agent_analyses_active_incident ON agent_analyses (incident_id) WHERE status IN ('queued', 'running') AND deleted_at IS NULL",
+      "CREATE UNIQUE INDEX uq_agent_analyses_automatic_incident ON agent_analyses (incident_id) WHERE trigger = 'automatic'"
+    ]
+  },
+  "analysis_conversations": {
+    "table": "\nCREATE TABLE analysis_conversations (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\towner_id UUID NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tlast_seq INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analysis_conversations PRIMARY KEY (id), \n\tCONSTRAINT fk_analysis_conversations_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_analysis_conversations_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_analysis_conversations_incident_id ON analysis_conversations (incident_id)",
+      "CREATE INDEX ix_analysis_conversations_owner_id ON analysis_conversations (owner_id)"
+    ]
+  },
+  "analysis_runs": {
+    "table": "\nCREATE TABLE analysis_runs (\n\tid UUID NOT NULL, \n\tconversation_id UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tconfig JSON NOT NULL, \n\tsource_context JSON DEFAULT '{}' NOT NULL, \n\tdatabase_context JSON DEFAULT '{}' NOT NULL, \n\tsession_id VARCHAR(100), \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\tmodel_requests INTEGER NOT NULL, \n\ttool_count INTEGER NOT NULL, \n\tevidence JSON NOT NULL, \n\tknowledge JSON NOT NULL, \n\ttool_calls JSON NOT NULL, \n\tcandidate JSON NOT NULL, \n\tadopted_analysis_id UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analysis_runs PRIMARY KEY (id), \n\tCONSTRAINT ck_analysis_runs_status CHECK (status IN ('queued','running','cancelling','completed','failed','cancelled','interrupted')), \n\tCONSTRAINT fk_analysis_runs_conversation_id_analysis_conversations FOREIGN KEY(conversation_id) REFERENCES analysis_conversations (id), \n\tCONSTRAINT fk_analysis_runs_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_analysis_runs_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT fk_analysis_runs_adopted_analysis_id_agent_analyses FOREIGN KEY(adopted_analysis_id) REFERENCES agent_analyses (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_analysis_runs_conversation_id ON analysis_runs (conversation_id)",
+      "CREATE UNIQUE INDEX uq_analysis_runs_active_conversation ON analysis_runs (conversation_id) WHERE status IN ('queued','running','cancelling') AND deleted_at IS NULL"
+    ]
+  },
+  "analysis_messages": {
+    "table": "\nCREATE TABLE analysis_messages (\n\tid UUID NOT NULL, \n\tconversation_id UUID NOT NULL, \n\trun_id UUID, \n\trole VARCHAR(20) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tstatus VARCHAR(30) NOT NULL, \n\tclient_message_id UUID, \n\tsdk_message_id VARCHAR(100), \n\tstream_key VARCHAR(100), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analysis_messages PRIMARY KEY (id), \n\tCONSTRAINT uq_analysis_messages_conversation_id UNIQUE (conversation_id, client_message_id), \n\tCONSTRAINT fk_analysis_messages_conversation_id_analysis_conversations FOREIGN KEY(conversation_id) REFERENCES analysis_conversations (id), \n\tCONSTRAINT fk_analysis_messages_run_id_analysis_runs FOREIGN KEY(run_id) REFERENCES analysis_runs (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_analysis_messages_conversation_id ON analysis_messages (conversation_id)",
+      "CREATE INDEX ix_analysis_messages_run_id ON analysis_messages (run_id)"
+    ]
+  },
+  "analysis_events": {
+    "table": "\nCREATE TABLE analysis_events (\n\tid UUID NOT NULL, \n\tconversation_id UUID NOT NULL, \n\trun_id UUID, \n\tseq INTEGER NOT NULL, \n\tkind VARCHAR(50) NOT NULL, \n\tdata JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analysis_events PRIMARY KEY (id), \n\tCONSTRAINT uq_analysis_events_conversation_id UNIQUE (conversation_id, seq), \n\tCONSTRAINT fk_analysis_events_conversation_id_analysis_conversations FOREIGN KEY(conversation_id) REFERENCES analysis_conversations (id), \n\tCONSTRAINT fk_analysis_events_run_id_analysis_runs FOREIGN KEY(run_id) REFERENCES analysis_runs (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_analysis_events_conversation_id ON analysis_events (conversation_id)",
+      "CREATE INDEX ix_analysis_events_run_id ON analysis_events (run_id)"
+    ]
+  },
+  "diagnosis_reviews": {
+    "table": "\nCREATE TABLE diagnosis_reviews (\n\tid UUID NOT NULL, \n\tanalysis_id UUID NOT NULL, \n\treviewer_id UUID NOT NULL, \n\tverdict VARCHAR(20) NOT NULL, \n\tconfirmed_cause VARCHAR(4000) NOT NULL, \n\tevidence VARCHAR(8000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_diagnosis_reviews PRIMARY KEY (id), \n\tCONSTRAINT fk_diagnosis_reviews_analysis_id_agent_analyses FOREIGN KEY(analysis_id) REFERENCES agent_analyses (id), \n\tCONSTRAINT fk_diagnosis_reviews_reviewer_id_users FOREIGN KEY(reviewer_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_diagnosis_reviews_analysis_id ON diagnosis_reviews (analysis_id)"
+    ]
+  },
+  "evaluation_cases": {
+    "table": "\nCREATE TABLE evaluation_cases (\n\tid UUID NOT NULL, \n\tfamily_id UUID NOT NULL, \n\tversion INTEGER NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tanalysis_id UUID NOT NULL, \n\tcreated_by UUID NOT NULL, \n\tsnapshot JSON NOT NULL, \n\tcontent_hash VARCHAR(64) NOT NULL, \n\tchecks JSON NOT NULL, \n\thuman_label VARCHAR(4000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_evaluation_cases PRIMARY KEY (id), \n\tCONSTRAINT uq_evaluation_cases_family_id UNIQUE (family_id, version), \n\tCONSTRAINT fk_evaluation_cases_analysis_id_agent_analyses FOREIGN KEY(analysis_id) REFERENCES agent_analyses (id), \n\tCONSTRAINT fk_evaluation_cases_created_by_users FOREIGN KEY(created_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "evaluation_runs": {
+    "table": "\nCREATE TABLE evaluation_runs (\n\tid UUID NOT NULL, \n\tcase_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tidempotency_key UUID NOT NULL, \n\trequest_hash VARCHAR(64) NOT NULL, \n\tprovider_kind VARCHAR(20) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tconfig JSON NOT NULL, \n\tprompt VARCHAR(8000) NOT NULL, \n\tresult JSON NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(80), \n\treview JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_evaluation_runs PRIMARY KEY (id), \n\tCONSTRAINT fk_evaluation_runs_case_id_evaluation_cases FOREIGN KEY(case_id) REFERENCES evaluation_cases (id), \n\tCONSTRAINT fk_evaluation_runs_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT uq_evaluation_runs_idempotency_key UNIQUE (idempotency_key)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_evaluation_runs_case_id ON evaluation_runs (case_id)",
+      "CREATE INDEX ix_evaluation_runs_status ON evaluation_runs (status)"
+    ]
+  },
+  "prediction_outcomes": {
+    "table": "\nCREATE TABLE prediction_outcomes (\n\tid UUID NOT NULL, \n\tresult_id UUID NOT NULL, \n\thorizon_hours INTEGER NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tobservation JSON NOT NULL, \n\tincident_links JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_prediction_outcomes PRIMARY KEY (id), \n\tCONSTRAINT uq_prediction_outcomes_result_id UNIQUE (result_id, horizon_hours), \n\tCONSTRAINT fk_prediction_outcomes_result_id_prediction_results FOREIGN KEY(result_id) REFERENCES prediction_results (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_prediction_outcomes_result_id ON prediction_outcomes (result_id)"
+    ]
+  },
+  "approvals": {
+    "table": "\nCREATE TABLE approvals (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\tanalysis_id UUID NOT NULL, \n\tcontainer_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tapprover_id UUID, \n\tstatus VARCHAR(20) NOT NULL, \n\tbinding JSON NOT NULL, \n\tbinding_hash VARCHAR(64) NOT NULL, \n\texpires_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tdecided_at TIMESTAMP WITH TIME ZONE, \n\tdecision_comment VARCHAR(2000), \n\terror_code VARCHAR(50), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_approvals PRIMARY KEY (id), \n\tCONSTRAINT ck_approvals_status CHECK (status IN ('pending','approved','rejected','expired','invalidated','consumed')), \n\tCONSTRAINT fk_approvals_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_approvals_analysis_id_agent_analyses FOREIGN KEY(analysis_id) REFERENCES agent_analyses (id), \n\tCONSTRAINT fk_approvals_container_id_containers FOREIGN KEY(container_id) REFERENCES containers (id), \n\tCONSTRAINT fk_approvals_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT fk_approvals_approver_id_users FOREIGN KEY(approver_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_approvals_incident_id ON approvals (incident_id)",
+      "CREATE UNIQUE INDEX uq_approvals_active_analysis ON approvals (analysis_id) WHERE status IN ('pending','approved') AND deleted_at IS NULL"
+    ]
+  },
+  "skill_executions": {
+    "table": "\nCREATE TABLE skill_executions (\n\tid UUID NOT NULL, \n\tapproval_id UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\tcontainer_id UUID NOT NULL, \n\tinitiated_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tbinding_hash VARCHAR(64) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tdispatched_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tprecheck JSON NOT NULL, \n\toutput JSON NOT NULL, \n\tverification JSON NOT NULL, \n\terror_code VARCHAR(50), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_skill_executions PRIMARY KEY (id), \n\tCONSTRAINT ck_skill_executions_status CHECK (status IN ('queued','prechecking','executing','verifying','succeeded','failed','interrupted','unknown')), \n\tCONSTRAINT uq_skill_executions_approval_id UNIQUE (approval_id), \n\tCONSTRAINT fk_skill_executions_approval_id_approvals FOREIGN KEY(approval_id) REFERENCES approvals (id), \n\tCONSTRAINT fk_skill_executions_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_skill_executions_container_id_containers FOREIGN KEY(container_id) REFERENCES containers (id), \n\tCONSTRAINT fk_skill_executions_initiated_by_users FOREIGN KEY(initiated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_skill_executions_incident_id ON skill_executions (incident_id)",
+      "CREATE UNIQUE INDEX uq_skill_executions_active_container ON skill_executions (container_id) WHERE status IN ('queued','prechecking','executing','verifying') AND deleted_at IS NULL"
+    ]
+  },
+  "audit_logs": {
+    "table": "\nCREATE TABLE audit_logs (\n\tid UUID NOT NULL, \n\tuser_id UUID, \n\tincident_id UUID NOT NULL, \n\tapproval_id UUID, \n\treport_id UUID, \n\texecution_id UUID, \n\taction VARCHAR(50) NOT NULL, \n\trequest_id VARCHAR(36) NOT NULL, \n\tip VARCHAR(100), \n\tdetail JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_audit_logs PRIMARY KEY (id), \n\tCONSTRAINT fk_audit_logs_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_audit_logs_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_audit_logs_approval_id_approvals FOREIGN KEY(approval_id) REFERENCES approvals (id), \n\tCONSTRAINT fk_audit_logs_report_id_postmortem_reports FOREIGN KEY(report_id) REFERENCES postmortem_reports (id), \n\tCONSTRAINT fk_audit_logs_execution_id_skill_executions FOREIGN KEY(execution_id) REFERENCES skill_executions (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_audit_logs_approval_id ON audit_logs (approval_id)",
+      "CREATE INDEX ix_audit_logs_incident_id ON audit_logs (incident_id)",
+      "CREATE INDEX ix_audit_logs_report_id ON audit_logs (report_id)"
+    ]
+  },
+  "retention_plans": {
+    "table": "\nCREATE TABLE retention_plans (\n\tid UUID NOT NULL, \n\tcreated_by UUID NOT NULL, \n\tconfirmed_by UUID, \n\tstatus VARCHAR(20) NOT NULL, \n\tcandidates JSON NOT NULL, \n\tresult JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tconfirmed_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(80), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_retention_plans PRIMARY KEY (id), \n\tCONSTRAINT fk_retention_plans_created_by_users FOREIGN KEY(created_by) REFERENCES users (id), \n\tCONSTRAINT fk_retention_plans_confirmed_by_users FOREIGN KEY(confirmed_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "archive_records": {
+    "table": "\nCREATE TABLE archive_records (\n\tid UUID NOT NULL, \n\tplan_id UUID NOT NULL, \n\tresource_kind VARCHAR(30) NOT NULL, \n\tresource_id UUID NOT NULL, \n\towner_id UUID, \n\tstatus VARCHAR(20) NOT NULL, \n\tsha256 VARCHAR(64) NOT NULL, \n\tarchive_bytes INTEGER NOT NULL, \n\treleased_file_bytes INTEGER NOT NULL, \n\tdatabase_reusable_bytes INTEGER NOT NULL, \n\tmetadata_snapshot JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_archive_records PRIMARY KEY (id), \n\tCONSTRAINT uq_archive_records_resource_kind UNIQUE (resource_kind, resource_id), \n\tCONSTRAINT fk_archive_records_plan_id_retention_plans FOREIGN KEY(plan_id) REFERENCES retention_plans (id), \n\tCONSTRAINT fk_archive_records_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_archive_records_plan_id ON archive_records (plan_id)",
+      "CREATE INDEX ix_archive_records_resource_id ON archive_records (resource_id)"
+    ]
+  },
+  "model_usage": {
+    "table": "\nCREATE TABLE model_usage (\n\tid UUID NOT NULL, \n\tdedupe_key VARCHAR(250) NOT NULL, \n\tsource VARCHAR(30) NOT NULL, \n\tprovider_kind VARCHAR(20) NOT NULL, \n\tapplication_id UUID, \n\tresource_kind VARCHAR(30) NOT NULL, \n\tresource_id UUID NOT NULL, \n\tpurpose VARCHAR(20) NOT NULL, \n\toperation VARCHAR(100) NOT NULL, \n\tmodel VARCHAR(100) NOT NULL, \n\tagent_module VARCHAR(20), \n\tagent_channel_id UUID, \n\tconfig_version INTEGER, \n\trequest_index INTEGER, \n\tattempt_index INTEGER, \n\toccurred_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcalls FLOAT, \n\tinput_tokens FLOAT, \n\toutput_tokens FLOAT, \n\tunknown_calls FLOAT, \n\tduration_seconds FLOAT, \n\tttft_seconds FLOAT, \n\toutcome VARCHAR(30) NOT NULL, \n\tdetail JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_model_usage PRIMARY KEY (id), \n\tCONSTRAINT uq_model_usage_dedupe_key UNIQUE (dedupe_key), \n\tCONSTRAINT fk_model_usage_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_model_usage_agent_channel_id_agent_channels FOREIGN KEY(agent_channel_id) REFERENCES agent_channels (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_model_usage_agent_channel_id ON model_usage (agent_channel_id)",
+      "CREATE INDEX ix_model_usage_agent_module ON model_usage (agent_module)",
+      "CREATE INDEX ix_model_usage_application_id ON model_usage (application_id)",
+      "CREATE INDEX ix_model_usage_occurred_at ON model_usage (occurred_at)",
+      "CREATE INDEX ix_model_usage_resource_id ON model_usage (resource_id)"
+    ]
+  },
+  "usage_cursors": {
+    "table": "\nCREATE TABLE usage_cursors (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tsource_epoch VARCHAR(100) NOT NULL, \n\tobserved_until TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_usage_cursors PRIMARY KEY (id), \n\tCONSTRAINT uq_usage_cursors_application_id UNIQUE (application_id), \n\tCONSTRAINT fk_usage_cursors_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": []
+  },
+  "model_prices": {
+    "table": "\nCREATE TABLE model_prices (\n\tid UUID NOT NULL, \n\tmodel VARCHAR(100) NOT NULL, \n\tagent_channel_id UUID, \n\tcurrency VARCHAR(3) NOT NULL, \n\teffective_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tinput_per_million NUMERIC(20, 8) NOT NULL, \n\toutput_per_million NUMERIC(20, 8) NOT NULL, \n\tcreated_by UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_model_prices PRIMARY KEY (id), \n\tCONSTRAINT uq_model_prices_model UNIQUE NULLS NOT DISTINCT (model, currency, effective_at, agent_channel_id), \n\tCONSTRAINT fk_model_prices_agent_channel_id_agent_channels FOREIGN KEY(agent_channel_id) REFERENCES agent_channels (id), \n\tCONSTRAINT fk_model_prices_created_by_users FOREIGN KEY(created_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "usage_budgets": {
+    "table": "\nCREATE TABLE usage_budgets (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tcurrency VARCHAR(3) NOT NULL, \n\tmonthly_limit NUMERIC(20, 8) NOT NULL, \n\tapplication_id UUID, \n\tpurpose VARCHAR(20), \n\tenabled BOOLEAN NOT NULL, \n\tversion INTEGER NOT NULL, \n\tconfigured_by UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_usage_budgets PRIMARY KEY (id), \n\tCONSTRAINT fk_usage_budgets_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_usage_budgets_configured_by_users FOREIGN KEY(configured_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "improvement_tasks": {
+    "table": "\nCREATE TABLE improvement_tasks (\n\tid UUID NOT NULL, \n\treport_id UUID NOT NULL, \n\treport_revision INTEGER NOT NULL, \n\titem_index INTEGER NOT NULL, \n\tincident_id UUID NOT NULL, \n\titem JSON NOT NULL, \n\ttitle VARCHAR(2000) NOT NULL, \n\tstatus VARCHAR(30) NOT NULL, \n\tassignee_id UUID, \n\trequested_by UUID NOT NULL, \n\tdue_at TIMESTAMP WITH TIME ZONE, \n\tacceptance VARCHAR(8000) NOT NULL, \n\tsubmission JSON NOT NULL, \n\tdecision JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_improvement_tasks PRIMARY KEY (id), \n\tCONSTRAINT uq_improvement_tasks_report_id UNIQUE (report_id, report_revision, item_index), \n\tCONSTRAINT fk_improvement_tasks_report_id_postmortem_reports FOREIGN KEY(report_id) REFERENCES postmortem_reports (id), \n\tCONSTRAINT fk_improvement_tasks_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_improvement_tasks_assignee_id_users FOREIGN KEY(assignee_id) REFERENCES users (id), \n\tCONSTRAINT fk_improvement_tasks_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_improvement_tasks_report_id ON improvement_tasks (report_id)"
+    ]
+  },
+  "incidents": {
+    "table": "\nCREATE TABLE incidents (\n\tid UUID NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tseverity VARCHAR(20) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tassignee_id UUID, \n\tstarted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tlast_alert_started_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\trecovered_at TIMESTAMP WITH TIME ZONE, \n\tclosed_at TIMESTAMP WITH TIME ZONE, \n\tclosure JSON DEFAULT '{}' NOT NULL, \n\twas_in_progress BOOLEAN DEFAULT 'false' NOT NULL, \n\tmerged_into_id UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_incidents PRIMARY KEY (id), \n\tCONSTRAINT ck_incidents_status CHECK (status IN ('open', 'in_progress', 'recovered', 'closed', 'merged')), \n\tCONSTRAINT ck_incidents_severity CHECK (severity IN ('warning', 'critical')), \n\tCONSTRAINT fk_incidents_assignee_id_users FOREIGN KEY(assignee_id) REFERENCES users (id), \n\tCONSTRAINT fk_incidents_merged_into_id_incidents FOREIGN KEY(merged_into_id) REFERENCES incidents (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_incidents_assignee_id ON incidents (assignee_id)"
+    ]
+  },
+  "incident_alerts": {
+    "table": "\nCREATE TABLE incident_alerts (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\talert_event_id UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_incident_alerts PRIMARY KEY (id), \n\tCONSTRAINT fk_incident_alerts_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT uq_incident_alerts_alert_event_id UNIQUE (alert_event_id), \n\tCONSTRAINT fk_incident_alerts_alert_event_id_alert_events FOREIGN KEY(alert_event_id) REFERENCES alert_events (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_incident_alerts_incident_id ON incident_alerts (incident_id)"
+    ]
+  },
+  "incident_timeline": {
+    "table": "\nCREATE TABLE incident_timeline (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\tevent_type VARCHAR(40) NOT NULL, \n\toccurred_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tactor_type VARCHAR(20) NOT NULL, \n\tactor_id UUID, \n\tcontent JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_incident_timeline PRIMARY KEY (id), \n\tCONSTRAINT fk_incident_timeline_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_incident_timeline_actor_id_users FOREIGN KEY(actor_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_incident_timeline_incident_id ON incident_timeline (incident_id)"
+    ]
+  },
+  "inspection_data_sources": {
+    "table": "\nCREATE TABLE inspection_data_sources (\n\tid UUID NOT NULL, \n\tapplication_id UUID, \n\tname VARCHAR(100) NOT NULL, \n\tenvironment VARCHAR(50) NOT NULL, \n\tsource_kind VARCHAR(20) NOT NULL, \n\tsource_config JSON NOT NULL, \n\tencrypted_headers TEXT, \n\tenabled BOOLEAN DEFAULT true NOT NULL, \n\tversion INTEGER DEFAULT '1' NOT NULL, \n\tlast_test_at TIMESTAMP WITH TIME ZONE, \n\tlast_test_success BOOLEAN, \n\tlast_error_code VARCHAR(80), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_data_sources PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_data_sources_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_data_sources_application_id ON inspection_data_sources (application_id)"
+    ]
+  },
+  "inspection_plans": {
+    "table": "\nCREATE TABLE inspection_plans (\n\tid UUID NOT NULL, \n\tapplication_id UUID, \n\tconfigured_by UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tenvironment VARCHAR(50) NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\ttrial_only BOOLEAN DEFAULT false NOT NULL, \n\tversion INTEGER NOT NULL, \n\tinterval_seconds INTEGER NOT NULL, \n\tdata_source_id UUID, \n\tschedule_kind VARCHAR(20) DEFAULT 'interval' NOT NULL, \n\tcron_expression VARCHAR(100) DEFAULT '' NOT NULL, \n\tschedule_timezone VARCHAR(100) DEFAULT 'Asia/Shanghai' NOT NULL, \n\tscheduled_at TIMESTAMP WITH TIME ZONE, \n\ttimeout_seconds INTEGER DEFAULT '300' NOT NULL, \n\tmax_retries INTEGER DEFAULT '0' NOT NULL, \n\tlookback_seconds INTEGER NOT NULL, \n\tmax_records INTEGER NOT NULL, \n\texecution_mode VARCHAR(20) DEFAULT 'records' NOT NULL, \n\tagent_source_ids JSON DEFAULT '[]' NOT NULL, \n\tagent_parameters JSON DEFAULT '{}' NOT NULL, \n\tagent_enabled BOOLEAN NOT NULL, \n\tmax_agent_items INTEGER NOT NULL, \n\tskill_id UUID, \n\tskill_version INTEGER, \n\tsource_kind VARCHAR(20) NOT NULL, \n\tsource_config JSON NOT NULL, \n\tencrypted_headers TEXT, \n\trelated_sources JSON DEFAULT '[]' NOT NULL, \n\tencrypted_related_headers TEXT, \n\trules JSON NOT NULL, \n\tcheck_items JSON DEFAULT '[]' NOT NULL, \n\tfixed_objects JSON DEFAULT '[]' NOT NULL, \n\tobject_mode VARCHAR(20) DEFAULT 'dynamic' NOT NULL, \n\tnext_run_at TIMESTAMP WITH TIME ZONE, \n\twatermark TIMESTAMP WITH TIME ZONE, \n\tcontinuation JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_plans PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_plans_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_inspection_plans_configured_by_users FOREIGN KEY(configured_by) REFERENCES users (id), \n\tCONSTRAINT fk_inspection_plans_data_source_id_inspection_data_sources FOREIGN KEY(data_source_id) REFERENCES inspection_data_sources (id), \n\tCONSTRAINT fk_inspection_plans_skill_id_knowledge_skills FOREIGN KEY(skill_id) REFERENCES knowledge_skills (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_plans_application_id ON inspection_plans (application_id)",
+      "CREATE INDEX ix_inspection_plans_next_run_at ON inspection_plans (next_run_at)"
+    ]
+  },
+  "inspection_runs": {
+    "table": "\nCREATE TABLE inspection_runs (\n\tid UUID NOT NULL, \n\tplan_id UUID NOT NULL, \n\tplan_version INTEGER NOT NULL, \n\ttrigger VARCHAR(20) NOT NULL, \n\trun_kind VARCHAR(20) DEFAULT 'standard' NOT NULL, \n\trequested_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tsnapshot JSON NOT NULL, \n\twindow_start TIMESTAMP WITH TIME ZONE NOT NULL, \n\twindow_end TIMESTAMP WITH TIME ZONE NOT NULL, \n\tpage_cursor JSON NOT NULL, \n\tcollected INTEGER NOT NULL, \n\tagent_calls INTEGER NOT NULL, \n\tsummary JSON NOT NULL, \n\terror_code VARCHAR(80), \n\terror_stage VARCHAR(30), \n\tretry_count INTEGER DEFAULT '0' NOT NULL, \n\tretry_at TIMESTAMP WITH TIME ZONE, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_runs PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_runs_plan_id_inspection_plans FOREIGN KEY(plan_id) REFERENCES inspection_plans (id), \n\tCONSTRAINT fk_inspection_runs_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_runs_plan_id ON inspection_runs (plan_id)",
+      "CREATE INDEX ix_inspection_runs_status ON inspection_runs (status)",
+      "CREATE UNIQUE INDEX uq_inspection_runs_active_plan ON inspection_runs (plan_id) WHERE status IN ('queued','collecting','evaluating')"
+    ]
+  },
+  "inspection_items": {
+    "table": "\nCREATE TABLE inspection_items (\n\tid UUID NOT NULL, \n\trun_id UUID NOT NULL, \n\tplan_id UUID NOT NULL, \n\tidentity_hash VARCHAR(64) NOT NULL, \n\trecord_id VARCHAR(200) NOT NULL, \n\trecord_version VARCHAR(200) NOT NULL, \n\tobserved_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tevidence JSON NOT NULL, \n\tchecks JSON NOT NULL, \n\tverdict VARCHAR(30) NOT NULL, \n\trule_verdict VARCHAR(20), \n\tcheck_status VARCHAR(20), \n\tagent_status VARCHAR(30) NOT NULL, \n\tagent_result JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_items PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_items_run_id_inspection_runs FOREIGN KEY(run_id) REFERENCES inspection_runs (id), \n\tCONSTRAINT fk_inspection_items_plan_id_inspection_plans FOREIGN KEY(plan_id) REFERENCES inspection_plans (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_items_object ON inspection_items (plan_id, record_id, created_at)",
+      "CREATE INDEX ix_inspection_items_plan_id ON inspection_items (plan_id)",
+      "CREATE INDEX ix_inspection_items_run_id ON inspection_items (run_id)",
+      "CREATE UNIQUE INDEX uq_inspection_items_identity ON inspection_items (identity_hash)"
+    ]
+  },
+  "inspection_reviews": {
+    "table": "\nCREATE TABLE inspection_reviews (\n\tid UUID NOT NULL, \n\titem_id UUID NOT NULL, \n\treviewer_id UUID NOT NULL, \n\tverdict VARCHAR(30) NOT NULL, \n\tcomment VARCHAR(4000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_reviews PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_reviews_item_id_inspection_items FOREIGN KEY(item_id) REFERENCES inspection_items (id), \n\tCONSTRAINT fk_inspection_reviews_reviewer_id_users FOREIGN KEY(reviewer_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_reviews_item_id ON inspection_reviews (item_id)"
+    ]
+  },
+  "inspection_check_results": {
+    "table": "\nCREATE TABLE inspection_check_results (\n\tid UUID NOT NULL, \n\trun_id UUID NOT NULL, \n\tplan_id UUID NOT NULL, \n\titem_id UUID, \n\tobject_key VARCHAR(200) NOT NULL, \n\tcheck_id VARCHAR(50) NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\tscope VARCHAR(20) NOT NULL, \n\texecution_status VARCHAR(20) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tseverity VARCHAR(20), \n\tsummary VARCHAR(4000) NOT NULL, \n\tresult JSON NOT NULL, \n\terror_code VARCHAR(80), \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_check_results PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_check_results_run_id_inspection_runs FOREIGN KEY(run_id) REFERENCES inspection_runs (id), \n\tCONSTRAINT fk_inspection_check_results_plan_id_inspection_plans FOREIGN KEY(plan_id) REFERENCES inspection_plans (id), \n\tCONSTRAINT fk_inspection_check_results_item_id_inspection_items FOREIGN KEY(item_id) REFERENCES inspection_items (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_check_results_item_id ON inspection_check_results (item_id)",
+      "CREATE INDEX ix_inspection_check_results_plan_id ON inspection_check_results (plan_id)",
+      "CREATE INDEX ix_inspection_check_results_run_id ON inspection_check_results (run_id)",
+      "CREATE UNIQUE INDEX uq_inspection_check_result ON inspection_check_results (run_id, object_key, check_id)"
+    ]
+  },
+  "inspection_traces": {
+    "table": "\nCREATE TABLE inspection_traces (\n\tid UUID NOT NULL, \n\trun_id UUID NOT NULL, \n\tplan_id UUID NOT NULL, \n\tcheck_result_id UUID NOT NULL, \n\ttool VARCHAR(80) NOT NULL, \n\tsuccess BOOLEAN NOT NULL, \n\tdata JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_traces PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_traces_run_id_inspection_runs FOREIGN KEY(run_id) REFERENCES inspection_runs (id), \n\tCONSTRAINT fk_inspection_traces_plan_id_inspection_plans FOREIGN KEY(plan_id) REFERENCES inspection_plans (id), \n\tCONSTRAINT fk_inspection_traces_check_result_id_inspection_check_results FOREIGN KEY(check_result_id) REFERENCES inspection_check_results (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_traces_check_result_id ON inspection_traces (check_result_id)",
+      "CREATE INDEX ix_inspection_traces_plan_id ON inspection_traces (plan_id)",
+      "CREATE INDEX ix_inspection_traces_run_id ON inspection_traces (run_id)"
+    ]
+  },
+  "inspection_http_connections": {
+    "table": "\nCREATE TABLE inspection_http_connections (\n\tid UUID NOT NULL, \n\tapplication_id UUID, \n\tname VARCHAR(100) NOT NULL, \n\tenvironment VARCHAR(50) NOT NULL, \n\tbase_url VARCHAR(2000) NOT NULL, \n\tencrypted_headers TEXT, \n\tenabled BOOLEAN NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_inspection_http_connections PRIMARY KEY (id), \n\tCONSTRAINT fk_inspection_http_connections_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_inspection_http_connections_application_id ON inspection_http_connections (application_id)"
+    ]
+  },
+  "knowledge_documents": {
+    "table": "\nCREATE TABLE knowledge_documents (\n\tid UUID NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tsource VARCHAR(500) NOT NULL, \n\ttags JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tindex_status VARCHAR(20) NOT NULL, \n\terror_code VARCHAR(50), \n\tapplication_ids JSON DEFAULT '[]' NOT NULL, \n\tapplicable_versions JSON DEFAULT '[]' NOT NULL, \n\towner_id UUID, \n\treview_at TIMESTAMP WITH TIME ZONE, \n\texpires_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_knowledge_documents PRIMARY KEY (id), \n\tCONSTRAINT fk_knowledge_documents_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "knowledge_chunks": {
+    "table": "\nCREATE TABLE knowledge_chunks (\n\tid UUID NOT NULL, \n\tdocument_id UUID NOT NULL, \n\tversion INTEGER NOT NULL, \n\tposition INTEGER NOT NULL, \n\tcontent TEXT NOT NULL, \n\tembedding VECTOR(512) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_knowledge_chunks PRIMARY KEY (id), \n\tCONSTRAINT fk_knowledge_chunks_document_id_knowledge_documents FOREIGN KEY(document_id) REFERENCES knowledge_documents (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_knowledge_chunks_document_id ON knowledge_chunks (document_id)"
+    ]
+  },
+  "knowledge_skills": {
+    "table": "\nCREATE TABLE knowledge_skills (\n\tid UUID NOT NULL, \n\tcode VARCHAR(100) NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tscripts JSON DEFAULT '{}' NOT NULL, \n\tresources JSON DEFAULT '{}' NOT NULL, \n\ttags JSON NOT NULL, \n\tversion INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tapplication_ids JSON DEFAULT '[]' NOT NULL, \n\tapplicable_versions JSON DEFAULT '[]' NOT NULL, \n\towner_id UUID, \n\treview_at TIMESTAMP WITH TIME ZONE, \n\texpires_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_knowledge_skills PRIMARY KEY (id), \n\tCONSTRAINT uq_knowledge_skills_code UNIQUE (code), \n\tCONSTRAINT fk_knowledge_skills_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "llm_endpoints": {
+    "table": "\nCREATE TABLE llm_endpoints (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tprovider VARCHAR(20) NOT NULL, \n\tbase_url VARCHAR(2000) NOT NULL, \n\tmodel VARCHAR(100) NOT NULL, \n\tencrypted_api_key TEXT, \n\tagent_channel_id UUID, \n\tprobe_enabled BOOLEAN NOT NULL, \n\tprobe_interval_seconds INTEGER NOT NULL, \n\tprobe_config_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_probe_at TIMESTAMP WITH TIME ZONE, \n\tlast_probe_success BOOLEAN, \n\tlast_error_type VARCHAR(40), \n\tlast_http_status INTEGER, \n\tlast_latency_ms FLOAT, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_llm_endpoints PRIMARY KEY (id), \n\tCONSTRAINT ck_llm_endpoints_key_source CHECK ((encrypted_api_key IS NULL) <> (agent_channel_id IS NULL)), \n\tCONSTRAINT uq_llm_endpoints_name UNIQUE (name), \n\tCONSTRAINT fk_llm_endpoints_agent_channel_id_agent_channels FOREIGN KEY(agent_channel_id) REFERENCES agent_channels (id)\n)\n\n",
+    "indexes": []
+  },
+  "llm_service_bindings": {
+    "table": "\nCREATE TABLE llm_service_bindings (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tllm_endpoint_id UUID NOT NULL, \n\tpurpose VARCHAR(2000) DEFAULT '' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_llm_service_bindings PRIMARY KEY (id), \n\tCONSTRAINT uq_llm_service_bindings_application_id UNIQUE (application_id, llm_endpoint_id), \n\tCONSTRAINT fk_llm_service_bindings_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_llm_service_bindings_llm_endpoint_id_llm_endpoints FOREIGN KEY(llm_endpoint_id) REFERENCES llm_endpoints (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_llm_service_bindings_application_id ON llm_service_bindings (application_id)",
+      "CREATE INDEX ix_llm_service_bindings_llm_endpoint_id ON llm_service_bindings (llm_endpoint_id)"
+    ]
+  },
+  "market_categories": {
+    "table": "\nCREATE TABLE market_categories (\n\tid UUID NOT NULL, \n\tname VARCHAR(60) NOT NULL, \n\tdescription VARCHAR(300) NOT NULL, \n\tsort_order INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_market_categories PRIMARY KEY (id)\n)\n\n",
+    "indexes": [
+      "CREATE UNIQUE INDEX uq_market_category_name ON market_categories (name) WHERE deleted_at IS NULL"
+    ]
+  },
+  "market_entries": {
+    "table": "\nCREATE TABLE market_entries (\n\tid UUID NOT NULL, \n\tkind VARCHAR(10) NOT NULL, \n\towner_id UUID NOT NULL, \n\tlisted BOOLEAN NOT NULL, \n\tpublished_revision_id UUID, \n\tpublished_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_market_entries PRIMARY KEY (id), \n\tCONSTRAINT ck_market_entries_kind CHECK (kind IN ('skill','tool')), \n\tCONSTRAINT fk_market_entries_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_market_entries_owner_id ON market_entries (owner_id)"
+    ]
+  },
+  "market_entry_revisions": {
+    "table": "\nCREATE TABLE market_entry_revisions (\n\tid UUID NOT NULL, \n\tentry_id UUID NOT NULL, \n\tnumber INTEGER NOT NULL, \n\tedit_version INTEGER NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tcategory_id UUID NOT NULL, \n\ttitle VARCHAR(100) NOT NULL, \n\tsummary VARCHAR(300) NOT NULL, \n\ttags JSON NOT NULL, \n\tcontent JSON NOT NULL, \n\tsubmitted_at TIMESTAMP WITH TIME ZONE, \n\treviewed_at TIMESTAMP WITH TIME ZONE, \n\treviewer_id UUID, \n\treview_note VARCHAR(2000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_market_entry_revisions PRIMARY KEY (id), \n\tCONSTRAINT uq_market_entry_revisions_entry_id UNIQUE (entry_id, number), \n\tCONSTRAINT ck_market_entry_revisions_status CHECK (status IN ('draft','pending','approved','rejected')), \n\tCONSTRAINT fk_market_entry_revisions_entry_id_market_entries FOREIGN KEY(entry_id) REFERENCES market_entries (id), \n\tCONSTRAINT fk_market_entry_revisions_category_id_market_categories FOREIGN KEY(category_id) REFERENCES market_categories (id), \n\tCONSTRAINT fk_market_entry_revisions_reviewer_id_users FOREIGN KEY(reviewer_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_market_entry_revisions_category_id ON market_entry_revisions (category_id)",
+      "CREATE INDEX ix_market_entry_revisions_entry_id ON market_entry_revisions (entry_id)",
+      "CREATE UNIQUE INDEX uq_market_revision_working ON market_entry_revisions (entry_id) WHERE status IN ('draft','pending') AND deleted_at IS NULL"
+    ]
+  },
+  "market_audit_logs": {
+    "table": "\nCREATE TABLE market_audit_logs (\n\tid UUID NOT NULL, \n\tuser_id UUID NOT NULL, \n\tentry_id UUID, \n\trevision_id UUID, \n\tcategory_id UUID, \n\taction VARCHAR(50) NOT NULL, \n\tdetail JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_market_audit_logs PRIMARY KEY (id), \n\tCONSTRAINT fk_market_audit_logs_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_market_audit_logs_entry_id_market_entries FOREIGN KEY(entry_id) REFERENCES market_entries (id), \n\tCONSTRAINT fk_market_audit_logs_revision_id_market_entry_revisions FOREIGN KEY(revision_id) REFERENCES market_entry_revisions (id), \n\tCONSTRAINT fk_market_audit_logs_category_id_market_categories FOREIGN KEY(category_id) REFERENCES market_categories (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_market_audit_logs_entry_id ON market_audit_logs (entry_id)"
+    ]
+  },
+  "service_monitors": {
+    "table": "\nCREATE TABLE service_monitors (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tcontainer_id UUID, \n\tprobe_server_id UUID, \n\tname VARCHAR(100) NOT NULL, \n\tprotocol VARCHAR(10) NOT NULL, \n\ttarget VARCHAR(2000) NOT NULL, \n\tmethod VARCHAR(10) NOT NULL, \n\troute VARCHAR(200) NOT NULL, \n\tdns_server VARCHAR(300) NOT NULL, \n\timportance VARCHAR(20) NOT NULL, \n\texpected_status INTEGER NOT NULL, \n\tassertions JSON NOT NULL, \n\tencrypted_request TEXT, \n\tinterval_seconds INTEGER NOT NULL, \n\ttimeout_seconds INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tconfig_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tlast_probe_at TIMESTAMP WITH TIME ZONE, \n\tlast_probe_success BOOLEAN, \n\tlast_error_code VARCHAR(50), \n\tlast_http_status INTEGER, \n\tlast_latency_seconds FLOAT, \n\tlast_success_at TIMESTAMP WITH TIME ZONE, \n\tlast_failure_at TIMESTAMP WITH TIME ZONE, \n\tlast_evidence JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_service_monitors PRIMARY KEY (id), \n\tCONSTRAINT fk_service_monitors_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_service_monitors_container_id_containers FOREIGN KEY(container_id) REFERENCES containers (id), \n\tCONSTRAINT fk_service_monitors_probe_server_id_servers FOREIGN KEY(probe_server_id) REFERENCES servers (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_service_monitors_application_id ON service_monitors (application_id)"
+    ]
+  },
+  "notification_policy": {
+    "table": "\nCREATE TABLE notification_policy (\n\tid INTEGER NOT NULL, \n\tmanaged BOOLEAN NOT NULL, \n\temail_enabled BOOLEAN NOT NULL, \n\tconfigured_by UUID NOT NULL, \n\tversion INTEGER NOT NULL, \n\tencrypted_smtp_config TEXT, \n\tsmtp_version INTEGER DEFAULT '0' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_notification_policy PRIMARY KEY (id), \n\tCONSTRAINT fk_notification_policy_configured_by_users FOREIGN KEY(configured_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "incident_responses": {
+    "table": "\nCREATE TABLE incident_responses (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\tsnapshot JSON NOT NULL, \n\tdue_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\taccepted_at TIMESTAMP WITH TIME ZONE, \n\taccepted_by UUID, \n\tescalated_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_incident_responses PRIMARY KEY (id), \n\tCONSTRAINT uq_incident_responses_incident_id UNIQUE (incident_id), \n\tCONSTRAINT fk_incident_responses_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_incident_responses_accepted_by_users FOREIGN KEY(accepted_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "notifications": {
+    "table": "\nCREATE TABLE notifications (\n\tid UUID NOT NULL, \n\tuser_id UUID NOT NULL, \n\tincident_id UUID, \n\tkind VARCHAR(40) NOT NULL, \n\tresource_kind VARCHAR(40) NOT NULL, \n\tresource_id UUID NOT NULL, \n\tdedupe_key VARCHAR(250) NOT NULL, \n\ttitle VARCHAR(200) NOT NULL, \n\tdetail JSON NOT NULL, \n\tread_at TIMESTAMP WITH TIME ZONE, \n\temail VARCHAR(254) NOT NULL, \n\tpolicy_version INTEGER, \n\tmail_status VARCHAR(20) NOT NULL, \n\tdispatched_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(80), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_notifications PRIMARY KEY (id), \n\tCONSTRAINT ck_notifications_mail_status CHECK (mail_status IN ('disabled','queued','sending','sent','failed','unknown')), \n\tCONSTRAINT fk_notifications_user_id_users FOREIGN KEY(user_id) REFERENCES users (id), \n\tCONSTRAINT fk_notifications_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT uq_notifications_dedupe_key UNIQUE (dedupe_key)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_notifications_incident_id ON notifications (incident_id)",
+      "CREATE INDEX ix_notifications_user_id ON notifications (user_id)"
+    ]
+  },
+  "maintenance_windows": {
+    "table": "\nCREATE TABLE maintenance_windows (\n\tid UUID NOT NULL, \n\tscope_kind VARCHAR(20) NOT NULL, \n\tscope_id UUID NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\treason VARCHAR(2000) NOT NULL, \n\tstarts_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tends_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tcreated_by UUID NOT NULL, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_maintenance_windows PRIMARY KEY (id), \n\tCONSTRAINT ck_maintenance_windows_time_range CHECK (ends_at > starts_at), \n\tCONSTRAINT ck_maintenance_windows_scope CHECK (scope_kind IN ('service','server','rule')), \n\tCONSTRAINT ck_maintenance_windows_kind CHECK (kind IN ('maintenance','silence')), \n\tCONSTRAINT fk_maintenance_windows_created_by_users FOREIGN KEY(created_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_maintenance_windows_scope_id ON maintenance_windows (scope_id)"
+    ]
+  },
+  "alert_inhibitions": {
+    "table": "\nCREATE TABLE alert_inhibitions (\n\tid UUID NOT NULL, \n\tparent_rule_id UUID NOT NULL, \n\tchild_rule_id UUID NOT NULL, \n\tcreated_by UUID NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_alert_inhibitions PRIMARY KEY (id), \n\tCONSTRAINT uq_alert_inhibitions_parent_rule_id UNIQUE (parent_rule_id, child_rule_id), \n\tCONSTRAINT ck_alert_inhibitions_different_rules CHECK (parent_rule_id <> child_rule_id), \n\tCONSTRAINT fk_alert_inhibitions_parent_rule_id_alert_rules FOREIGN KEY(parent_rule_id) REFERENCES alert_rules (id), \n\tCONSTRAINT fk_alert_inhibitions_child_rule_id_alert_rules FOREIGN KEY(child_rule_id) REFERENCES alert_rules (id), \n\tCONSTRAINT fk_alert_inhibitions_created_by_users FOREIGN KEY(created_by) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "operations_audit_logs": {
+    "table": "\nCREATE TABLE operations_audit_logs (\n\tid UUID NOT NULL, \n\tuser_id UUID, \n\taction VARCHAR(60) NOT NULL, \n\tresource_kind VARCHAR(40) NOT NULL, \n\tresource_id UUID, \n\tdetail JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_operations_audit_logs PRIMARY KEY (id), \n\tCONSTRAINT fk_operations_audit_logs_user_id_users FOREIGN KEY(user_id) REFERENCES users (id)\n)\n\n",
+    "indexes": []
+  },
+  "service_objectives": {
+    "table": "\nCREATE TABLE service_objectives (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tmonitor_id UUID, \n\tname VARCHAR(100) NOT NULL, \n\tkind VARCHAR(30) NOT NULL, \n\toperation VARCHAR(100) NOT NULL, \n\tmetric_source VARCHAR(20) DEFAULT 'application' NOT NULL, \n\ttarget FLOAT NOT NULL, \n\twindow_days INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tversion INTEGER NOT NULL, \n\tevaluation JSON DEFAULT '{}' NOT NULL, \n\tchecked_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_service_objectives PRIMARY KEY (id), \n\tCONSTRAINT ck_service_objectives_window CHECK (window_days IN (1,7,30)), \n\tCONSTRAINT ck_service_objectives_kind CHECK (kind IN ('business_success','probe_availability','request_p95','llm_ttft_p95')), \n\tCONSTRAINT ck_service_objectives_target CHECK (target > 0), \n\tCONSTRAINT fk_service_objectives_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_service_objectives_monitor_id_service_monitors FOREIGN KEY(monitor_id) REFERENCES service_monitors (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_service_objectives_application_id ON service_objectives (application_id)"
+    ]
+  },
+  "worker_heartbeats": {
+    "table": "\nCREATE TABLE worker_heartbeats (\n\tid VARCHAR(40) NOT NULL, \n\tobserved_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tstate VARCHAR(30) NOT NULL, \n\tdetail JSON DEFAULT '{}' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_worker_heartbeats PRIMARY KEY (id)\n)\n\n",
+    "indexes": []
+  },
+  "service_operations_policies": {
+    "table": "\nCREATE TABLE service_operations_policies (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\trecovery_seconds INTEGER NOT NULL, \n\tversion INTEGER NOT NULL, \n\tresponse_config JSON DEFAULT '{}' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_service_operations_policies PRIMARY KEY (id), \n\tCONSTRAINT uq_service_operations_policies_application_id UNIQUE (application_id), \n\tCONSTRAINT fk_service_operations_policies_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": []
+  },
+  "incident_relations": {
+    "table": "\nCREATE TABLE incident_relations (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\trelated_incident_id UUID NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tevidence JSON DEFAULT '{}' NOT NULL, \n\tdecided_by UUID, \n\tversion INTEGER NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_incident_relations PRIMARY KEY (id), \n\tCONSTRAINT uq_incident_relations_incident_id UNIQUE (incident_id, related_incident_id, kind), \n\tCONSTRAINT ck_incident_relations_status CHECK (status IN ('candidate','confirmed','dismissed')), \n\tCONSTRAINT ck_incident_relations_kind CHECK (kind IN ('related','dependency','recurrence')), \n\tCONSTRAINT ck_incident_relations_different_incidents CHECK (incident_id <> related_incident_id), \n\tCONSTRAINT fk_incident_relations_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_incident_relations_related_incident_id_incidents FOREIGN KEY(related_incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_incident_relations_decided_by_users FOREIGN KEY(decided_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_incident_relations_incident_id ON incident_relations (incident_id)",
+      "CREATE INDEX ix_incident_relations_related_incident_id ON incident_relations (related_incident_id)"
+    ]
+  },
+  "backup_records": {
+    "table": "\nCREATE TABLE backup_records (\n\tid UUID NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\tbackup_id UUID, \n\trequested_by UUID NOT NULL, \n\tidempotency_key UUID NOT NULL, \n\trequest_hash VARCHAR(64) NOT NULL, \n\tartifacts JSON NOT NULL, \n\tcompleted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tduration_seconds FLOAT, \n\tverification VARCHAR(20) NOT NULL, \n\tevidence VARCHAR(8000) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_backup_records PRIMARY KEY (id), \n\tCONSTRAINT fk_backup_records_backup_id_backup_records FOREIGN KEY(backup_id) REFERENCES backup_records (id), \n\tCONSTRAINT fk_backup_records_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT uq_backup_records_idempotency_key UNIQUE (idempotency_key)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_backup_records_completed_at ON backup_records (completed_at)"
+    ]
+  },
+  "prediction_tasks": {
+    "table": "\nCREATE TABLE prediction_tasks (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tserver_id UUID, \n\tcontainer_id UUID, \n\tllm_endpoint_id UUID, \n\tmetric VARCHAR(50) NOT NULL, \n\tselector JSON NOT NULL, \n\tthreshold FLOAT NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tinterval_seconds INTEGER NOT NULL, \n\tnext_run_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_prediction_tasks PRIMARY KEY (id), \n\tCONSTRAINT ck_prediction_tasks_one_resource CHECK (num_nonnulls(server_id, container_id, llm_endpoint_id) = 1), \n\tCONSTRAINT uq_prediction_tasks_name UNIQUE (name), \n\tCONSTRAINT fk_prediction_tasks_server_id_servers FOREIGN KEY(server_id) REFERENCES servers (id), \n\tCONSTRAINT fk_prediction_tasks_container_id_containers FOREIGN KEY(container_id) REFERENCES containers (id), \n\tCONSTRAINT fk_prediction_tasks_llm_endpoint_id_llm_endpoints FOREIGN KEY(llm_endpoint_id) REFERENCES llm_endpoints (id)\n)\n\n",
+    "indexes": []
+  },
+  "prediction_results": {
+    "table": "\nCREATE TABLE prediction_results (\n\tid UUID NOT NULL, \n\ttask_id UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\ttrigger VARCHAR(20) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\tdata_end_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\tconfig JSON NOT NULL, \n\tquality JSON NOT NULL, \n\thorizons JSON NOT NULL, \n\tanomalies JSON NOT NULL, \n\tdetector_state JSON NOT NULL, \n\tbacktest JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_prediction_results PRIMARY KEY (id), \n\tCONSTRAINT fk_prediction_results_task_id_prediction_tasks FOREIGN KEY(task_id) REFERENCES prediction_tasks (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_prediction_results_task_id ON prediction_results (task_id)",
+      "CREATE UNIQUE INDEX uq_prediction_results_active_task ON prediction_results (task_id) WHERE status IN ('queued', 'running') AND deleted_at IS NULL"
+    ]
+  },
+  "repair_handoffs": {
+    "table": "\nCREATE TABLE repair_handoffs (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\tanalysis_id UUID NOT NULL, \n\tapplication_id UUID, \n\trequested_by UUID NOT NULL, \n\tpacket JSON NOT NULL, \n\tpacket_hash VARCHAR(64) NOT NULL, \n\tresults JSON NOT NULL, \n\tverifications JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_repair_handoffs PRIMARY KEY (id), \n\tCONSTRAINT fk_repair_handoffs_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_repair_handoffs_analysis_id_agent_analyses FOREIGN KEY(analysis_id) REFERENCES agent_analyses (id), \n\tCONSTRAINT fk_repair_handoffs_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_repair_handoffs_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_repair_handoffs_incident_id ON repair_handoffs (incident_id)"
+    ]
+  },
+  "postmortem_reports": {
+    "table": "\nCREATE TABLE postmortem_reports (\n\tid UUID NOT NULL, \n\tincident_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\trevision INTEGER NOT NULL, \n\tsnapshot JSON NOT NULL, \n\tsnapshot_hash VARCHAR(64) NOT NULL, \n\tconfig JSON NOT NULL, \n\ttool_calls JSON NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\treviewed_by UUID, \n\treviewed_at TIMESTAMP WITH TIME ZONE, \n\treview_comment VARCHAR(2000), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_postmortem_reports PRIMARY KEY (id), \n\tCONSTRAINT ck_postmortem_reports_status CHECK (status IN ('queued','running','draft','approved','failed','interrupted')), \n\tCONSTRAINT fk_postmortem_reports_incident_id_incidents FOREIGN KEY(incident_id) REFERENCES incidents (id), \n\tCONSTRAINT fk_postmortem_reports_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT fk_postmortem_reports_reviewed_by_users FOREIGN KEY(reviewed_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_postmortem_reports_incident_id ON postmortem_reports (incident_id)",
+      "CREATE UNIQUE INDEX uq_postmortem_reports_active_incident ON postmortem_reports (incident_id) WHERE status IN ('queued','running') AND deleted_at IS NULL"
+    ]
+  },
+  "postmortem_revisions": {
+    "table": "\nCREATE TABLE postmortem_revisions (\n\tid UUID NOT NULL, \n\treport_id UUID NOT NULL, \n\trevision INTEGER NOT NULL, \n\tauthor_id UUID, \n\tcontent JSON NOT NULL, \n\tcontent_hash VARCHAR(64) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_postmortem_revisions PRIMARY KEY (id), \n\tCONSTRAINT uq_postmortem_revisions_report_id UNIQUE (report_id, revision), \n\tCONSTRAINT fk_postmortem_revisions_report_id_postmortem_reports FOREIGN KEY(report_id) REFERENCES postmortem_reports (id), \n\tCONSTRAINT fk_postmortem_revisions_author_id_users FOREIGN KEY(author_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_postmortem_revisions_report_id ON postmortem_revisions (report_id)"
+    ]
+  },
+  "postmortem_deliveries": {
+    "table": "\nCREATE TABLE postmortem_deliveries (\n\tid UUID NOT NULL, \n\treport_id UUID NOT NULL, \n\trevision INTEGER NOT NULL, \n\trequested_by UUID NOT NULL, \n\tidempotency_key UUID NOT NULL, \n\trequest_hash VARCHAR(64) NOT NULL, \n\trecipients JSON NOT NULL, \n\tsender VARCHAR(254) NOT NULL, \n\tsubject VARCHAR(300) NOT NULL, \n\tbody TEXT NOT NULL, \n\tcomment VARCHAR(2000) NOT NULL, \n\tattachment BYTEA NOT NULL, \n\tattachment_hash VARCHAR(64) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tdispatched_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_postmortem_deliveries PRIMARY KEY (id), \n\tCONSTRAINT ck_postmortem_deliveries_status CHECK (status IN ('queued','sending','sent','failed','interrupted','unknown')), \n\tCONSTRAINT fk_postmortem_deliveries_report_id_postmortem_reports FOREIGN KEY(report_id) REFERENCES postmortem_reports (id), \n\tCONSTRAINT fk_postmortem_deliveries_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id), \n\tCONSTRAINT uq_postmortem_deliveries_idempotency_key UNIQUE (idempotency_key)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_postmortem_deliveries_report_id ON postmortem_deliveries (report_id)"
+    ]
+  },
+  "ssh_credentials": {
+    "table": "\nCREATE TABLE ssh_credentials (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tauth_type VARCHAR(20) NOT NULL, \n\tencrypted_secret TEXT NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_ssh_credentials PRIMARY KEY (id), \n\tCONSTRAINT uq_ssh_credentials_name UNIQUE (name)\n)\n\n",
+    "indexes": []
+  },
+  "servers": {
+    "table": "\nCREATE TABLE servers (\n\tid UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\thost VARCHAR(253) NOT NULL, \n\tssh_port INTEGER NOT NULL, \n\tssh_user VARCHAR(64) NOT NULL, \n\tcredential_id UUID, \n\tssh_host_key TEXT, \n\tenvironment VARCHAR(50) NOT NULL, \n\tnode_exporter_target VARCHAR(300) NOT NULL, \n\tcadvisor_target VARCHAR(300) NOT NULL, \n\tdocker_state_target VARCHAR(300), \n\tblackbox_exporter_target VARCHAR(300), \n\tcollection_config_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\thealth_url VARCHAR(2000), \n\tmonitoring_enabled BOOLEAN NOT NULL, \n\tlast_ssh_test_at TIMESTAMP WITH TIME ZONE, \n\tlast_ssh_test_status VARCHAR(30), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_servers PRIMARY KEY (id), \n\tCONSTRAINT uq_servers_name UNIQUE (name), \n\tCONSTRAINT fk_servers_credential_id_ssh_credentials FOREIGN KEY(credential_id) REFERENCES ssh_credentials (id)\n)\n\n",
+    "indexes": []
+  },
+  "containers": {
+    "table": "\nCREATE TABLE containers (\n\tid UUID NOT NULL, \n\tserver_id UUID NOT NULL, \n\tdocker_id VARCHAR(300) NOT NULL, \n\tapplication_id UUID, \n\tname VARCHAR(300) NOT NULL, \n\timage VARCHAR(500) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tlabels JSON NOT NULL, \n\tlast_seen_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\timage_id VARCHAR(71), \n\tidentity JSON DEFAULT '{}' NOT NULL, \n\tidentity_observed_at TIMESTAMP WITH TIME ZONE, \n\tservice_name VARCHAR(100) DEFAULT '' NOT NULL, \n\tpurpose VARCHAR(2000) DEFAULT '' NOT NULL, \n\tdepends_on JSON DEFAULT '[]' NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_containers PRIMARY KEY (id), \n\tCONSTRAINT uq_containers_server_id UNIQUE (server_id, docker_id), \n\tCONSTRAINT fk_containers_server_id_servers FOREIGN KEY(server_id) REFERENCES servers (id), \n\tCONSTRAINT fk_containers_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_containers_application_id ON containers (application_id)",
+      "CREATE INDEX ix_containers_server_id ON containers (server_id)"
+    ]
+  },
+  "service_databases": {
+    "table": "\nCREATE TABLE service_databases (\n\tid UUID NOT NULL, \n\tapplication_id UUID, \n\tname VARCHAR(100) NOT NULL, \n\tengine VARCHAR(20) NOT NULL, \n\thost VARCHAR(253) NOT NULL, \n\tport INTEGER NOT NULL, \n\tdatabase VARCHAR(128) NOT NULL, \n\tusername VARCHAR(128) NOT NULL, \n\ttls_mode VARCHAR(20) NOT NULL, \n\tencrypted_config TEXT NOT NULL, \n\tenvironment VARCHAR(50) NOT NULL, \n\tpurpose VARCHAR(2000) NOT NULL, \n\tdescription TEXT NOT NULL, \n\ttable_notes JSON NOT NULL, \n\tallowed_tables JSON NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tquery_enabled BOOLEAN NOT NULL, \n\tconfig_version INTEGER NOT NULL, \n\tschema_cache JSON NOT NULL, \n\tschema_hash VARCHAR(64) NOT NULL, \n\tschema_refreshed_at TIMESTAMP WITH TIME ZONE, \n\tlast_test_at TIMESTAMP WITH TIME ZONE, \n\tlast_test_success BOOLEAN, \n\tlast_error_code VARCHAR(80), \n\tpermission_status VARCHAR(30) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_service_databases PRIMARY KEY (id), \n\tCONSTRAINT fk_service_databases_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_service_databases_application_id ON service_databases (application_id)"
+    ]
+  },
+  "applications": {
+    "table": "\nCREATE TABLE applications (\n\tid UUID NOT NULL, \n\tcode VARCHAR(100) NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tpurpose VARCHAR(2000) DEFAULT '' NOT NULL, \n\tdepends_on JSON DEFAULT '[]' NOT NULL, \n\towner VARCHAR(100) NOT NULL, \n\tentrypoint VARCHAR(500) NOT NULL, \n\tsource_subdir VARCHAR(500) NOT NULL, \n\tpath_mappings JSON NOT NULL, \n\tgit_url VARCHAR(2000), \n\tgit_ref VARCHAR(300) NOT NULL, \n\tgit_username VARCHAR(200) NOT NULL, \n\tencrypted_git_token TEXT, \n\tsvn_url VARCHAR(2000), \n\tsvn_revision VARCHAR(20) DEFAULT 'HEAD' NOT NULL, \n\tsvn_username VARCHAR(200) DEFAULT '' NOT NULL, \n\tencrypted_svn_password TEXT, \n\tlocal_path VARCHAR(500), \n\tenabled BOOLEAN NOT NULL, \n\ttraffic_target VARCHAR(300), \n\ttraffic_config_changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_applications PRIMARY KEY (id), \n\tCONSTRAINT uq_applications_code UNIQUE (code)\n)\n\n",
+    "indexes": []
+  },
+  "source_snapshots": {
+    "table": "\nCREATE TABLE source_snapshots (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\trequested_by UUID NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tsource VARCHAR(20), \n\trequest JSON NOT NULL, \n\tgit_commit VARCHAR(64), \n\tsvn_revision VARCHAR(20), \n\tcontent_hash VARCHAR(64), \n\tmanifest JSON NOT NULL, \n\tdata_gaps JSON NOT NULL, \n\tfile_count INTEGER NOT NULL, \n\ttotal_bytes INTEGER NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE, \n\tfinished_at TIMESTAMP WITH TIME ZONE, \n\terror_code VARCHAR(50), \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_source_snapshots PRIMARY KEY (id), \n\tCONSTRAINT ck_source_snapshots_status CHECK (status IN ('queued','running','ready','partial','failed','interrupted')), \n\tCONSTRAINT fk_source_snapshots_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_source_snapshots_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_source_snapshots_application_id ON source_snapshots (application_id)",
+      "CREATE UNIQUE INDEX uq_source_snapshots_running_application ON source_snapshots (application_id) WHERE status = 'running' AND deleted_at IS NULL"
+    ]
+  },
+  "application_releases": {
+    "table": "\nCREATE TABLE application_releases (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tversion VARCHAR(100) NOT NULL, \n\tsnapshot_id UUID, \n\texpected_commit VARCHAR(64), \n\texpected_revision VARCHAR(20), \n\timage_ref VARCHAR(500) NOT NULL, \n\timage_id VARCHAR(71), \n\trepo_digest VARCHAR(1000), \n\tchange_summary TEXT NOT NULL, \n\ttest_result TEXT NOT NULL, \n\tbuild_source_status VARCHAR(30) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_application_releases PRIMARY KEY (id), \n\tCONSTRAINT uq_application_releases_application_id UNIQUE (application_id, version), \n\tCONSTRAINT fk_application_releases_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_application_releases_snapshot_id_source_snapshots FOREIGN KEY(snapshot_id) REFERENCES source_snapshots (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_application_releases_application_id ON application_releases (application_id)"
+    ]
+  },
+  "application_deployments": {
+    "table": "\nCREATE TABLE application_deployments (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\trelease_id UUID NOT NULL, \n\tserver_id UUID, \n\tcontainer_id UUID, \n\tllm_endpoint_id UUID, \n\tenvironment VARCHAR(50) NOT NULL, \n\tcompose_project VARCHAR(200) NOT NULL, \n\tcompose_service VARCHAR(200) NOT NULL, \n\tconfig_version VARCHAR(200) NOT NULL, \n\tstarted_at TIMESTAMP WITH TIME ZONE NOT NULL, \n\tended_at TIMESTAMP WITH TIME ZONE, \n\tbinding JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_application_deployments PRIMARY KEY (id), \n\tCONSTRAINT ck_application_deployments_one_target CHECK (num_nonnulls(container_id, llm_endpoint_id) = 1), \n\tCONSTRAINT ck_application_deployments_time_range CHECK (ended_at IS NULL OR ended_at > started_at), \n\tCONSTRAINT fk_application_deployments_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_application_deployments_release_id_application_releases FOREIGN KEY(release_id) REFERENCES application_releases (id), \n\tCONSTRAINT fk_application_deployments_server_id_servers FOREIGN KEY(server_id) REFERENCES servers (id), \n\tCONSTRAINT fk_application_deployments_container_id_containers FOREIGN KEY(container_id) REFERENCES containers (id), \n\tCONSTRAINT fk_application_deployments_llm_endpoint_id_llm_endpoints FOREIGN KEY(llm_endpoint_id) REFERENCES llm_endpoints (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_application_deployments_application_id ON application_deployments (application_id)",
+      "CREATE INDEX ix_application_deployments_container_id ON application_deployments (container_id)",
+      "CREATE INDEX ix_application_deployments_llm_endpoint_id ON application_deployments (llm_endpoint_id)",
+      "CREATE INDEX ix_application_deployments_release_id ON application_deployments (release_id)"
+    ]
+  },
+  "source_audit_logs": {
+    "table": "\nCREATE TABLE source_audit_logs (\n\tid UUID NOT NULL, \n\tapplication_id UUID NOT NULL, \n\tuser_id UUID, \n\taction VARCHAR(50) NOT NULL, \n\tdetail JSON NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_source_audit_logs PRIMARY KEY (id), \n\tCONSTRAINT fk_source_audit_logs_application_id_applications FOREIGN KEY(application_id) REFERENCES applications (id), \n\tCONSTRAINT fk_source_audit_logs_user_id_users FOREIGN KEY(user_id) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_source_audit_logs_application_id ON source_audit_logs (application_id)"
+    ]
+  },
+  "code_rules": {
+    "table": "\nCREATE TABLE askdata.code_rules (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tmodel_version_id UUID NOT NULL, \n\tsource_snapshot_id UUID, \n\tgit_commit VARCHAR(64), \n\tsvn_revision VARCHAR(40), \n\tcontent_hash VARCHAR(64) NOT NULL, \n\tlanguage VARCHAR(10) NOT NULL, \n\tpath VARCHAR(500) NOT NULL, \n\tstart_line INTEGER NOT NULL, \n\tend_line INTEGER NOT NULL, \n\tsnippet_hash VARCHAR(64) NOT NULL, \n\trule_kind VARCHAR(30) NOT NULL, \n\tobject_key VARCHAR(300) NOT NULL, \n\texpression TEXT NOT NULL, \n\tsql_text TEXT NOT NULL, \n\tdetail JSONB NOT NULL, \n\tparse_state VARCHAR(12) NOT NULL, \n\tsource VARCHAR(12) NOT NULL, \n\tfingerprint VARCHAR(64) NOT NULL, \n\tcertified BOOLEAN NOT NULL, \n\tedited_by UUID, \n\treview_required BOOLEAN NOT NULL, \n\treview_note VARCHAR(300) NOT NULL, \n\tconflict_with UUID, \n\tconflict_state VARCHAR(12) NOT NULL, \n\tsuperseded BOOLEAN NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_code_rules PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_code_rules_fingerprint UNIQUE (model_version_id, fingerprint), \n\tCONSTRAINT ck_code_rules_ck_askdata_code_rules_language CHECK (language IN ('python','java','other')), \n\tCONSTRAINT ck_code_rules_ck_askdata_code_rules_parse_state CHECK (parse_state IN ('static','dynamic')), \n\tCONSTRAINT ck_code_rules_ck_askdata_code_rules_source CHECK (source IN ('auto','manual')), \n\tCONSTRAINT ck_code_rules_ck_askdata_code_rules_conflict_state CHECK (conflict_state IN ('none','pending','resolved')), \n\tCONSTRAINT fk_code_rules_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_code_rules_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT fk_code_rules_source_snapshot_id_source_snapshots FOREIGN KEY(source_snapshot_id) REFERENCES source_snapshots (id), \n\tCONSTRAINT fk_code_rules_edited_by_users FOREIGN KEY(edited_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_askdata_code_rules_review ON askdata.code_rules (model_version_id, review_required)",
+      "CREATE INDEX ix_askdata_code_rules_source ON askdata.code_rules (model_version_id, path, rule_kind, object_key)",
+      "CREATE INDEX ix_code_rules_connection_id ON askdata.code_rules (connection_id)",
+      "CREATE INDEX ix_code_rules_model_version_id ON askdata.code_rules (model_version_id)"
+    ]
+  },
+  "imports": {
+    "table": "\nCREATE TABLE askdata.imports (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tmodel_version_id UUID, \n\trequested_by UUID NOT NULL, \n\tfilename VARCHAR(200) NOT NULL, \n\tstatus VARCHAR(20) NOT NULL, \n\tconflict_policy VARCHAR(20) NOT NULL, \n\tdocument JSONB NOT NULL, \n\treport JSONB NOT NULL, \n\tapplied_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_imports PRIMARY KEY (id), \n\tCONSTRAINT ck_imports_ck_askdata_imports_status CHECK (status IN ('previewed','applied','failed')), \n\tCONSTRAINT fk_imports_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_imports_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT fk_imports_requested_by_users FOREIGN KEY(requested_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_imports_connection_id ON askdata.imports (connection_id)"
+    ]
+  },
+  "rules": {
+    "table": "\nCREATE TABLE askdata.rules (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tname VARCHAR(120) NOT NULL, \n\tdescription VARCHAR(300) NOT NULL, \n\tkind VARCHAR(30) NOT NULL, \n\ttarget VARCHAR(300) NOT NULL, \n\texpression TEXT NOT NULL, \n\tunit VARCHAR(30) NOT NULL, \n\tpriority INTEGER NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_rules PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_rules_name UNIQUE (connection_id, name), \n\tCONSTRAINT ck_rules_ck_askdata_rules_kind CHECK (kind IN ('statistical_scope','time_semantics','unit','filter','soft_delete','status')), \n\tCONSTRAINT fk_rules_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_rules_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_rules_connection_id ON askdata.rules (connection_id)"
+    ]
+  },
+  "supplements": {
+    "table": "\nCREATE TABLE askdata.supplements (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tkind VARCHAR(20) NOT NULL, \n\tterm VARCHAR(120) NOT NULL, \n\tdefinition TEXT NOT NULL, \n\taliases JSONB NOT NULL, \n\tapplies_to VARCHAR(300) NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_supplements PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_supplements_term UNIQUE (connection_id, term), \n\tCONSTRAINT ck_supplements_ck_askdata_supplements_kind CHECK (kind IN ('abbreviation','alias','context')), \n\tCONSTRAINT fk_supplements_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_supplements_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_supplements_connection_id ON askdata.supplements (connection_id)"
+    ]
+  },
+  "tags": {
+    "table": "\nCREATE TABLE askdata.tags (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tname VARCHAR(60) NOT NULL, \n\tcolor VARCHAR(20) NOT NULL, \n\tdescription VARCHAR(300) NOT NULL, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_tags PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_tags_name UNIQUE (connection_id, name), \n\tCONSTRAINT fk_tags_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_tags_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_tags_connection_id ON askdata.tags (connection_id)"
+    ]
+  },
+  "tag_targets": {
+    "table": "\nCREATE TABLE askdata.tag_targets (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\ttag_id UUID NOT NULL, \n\tobject_kind VARCHAR(20) NOT NULL, \n\tobject_key VARCHAR(300) NOT NULL, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_tag_targets PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_tag_targets_object UNIQUE (tag_id, object_kind, object_key), \n\tCONSTRAINT ck_tag_targets_ck_askdata_tag_targets_kind CHECK (object_kind IN ('table','column','term','metric','code_rule')), \n\tCONSTRAINT fk_tag_targets_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_tag_targets_tag_id_tags FOREIGN KEY(tag_id) REFERENCES askdata.tags (id) ON DELETE CASCADE\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_tag_targets_connection_id ON askdata.tag_targets (connection_id)",
+      "CREATE INDEX ix_tag_targets_tag_id ON askdata.tag_targets (tag_id)"
+    ]
+  },
+  "analyses": {
+    "table": "\nCREATE TABLE askdata.analyses (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tmodel_version_id UUID, \n\towner_id UUID NOT NULL, \n\tname VARCHAR(200) NOT NULL, \n\tcategory VARCHAR(60) NOT NULL, \n\tquestion TEXT NOT NULL, \n\tsql_text TEXT NOT NULL, \n\texplanation TEXT NOT NULL, \n\tchart JSONB NOT NULL, \n\tevidence JSONB NOT NULL, \n\tsource_run_id UUID, \n\tlast_status VARCHAR(20) NOT NULL, \n\tlast_error_code VARCHAR(80), \n\tlast_row_count INTEGER, \n\tlast_duration_ms INTEGER, \n\tlast_executed_at TIMESTAMP WITH TIME ZONE, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_analyses PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_analyses_name UNIQUE (connection_id, owner_id, name), \n\tCONSTRAINT ck_analyses_ck_askdata_analyses_last_status CHECK (last_status IN ('completed','failed','cancelled','')), \n\tCONSTRAINT fk_analyses_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_analyses_model_version_id_model_versions FOREIGN KEY(model_version_id) REFERENCES askdata.model_versions (id), \n\tCONSTRAINT fk_analyses_owner_id_users FOREIGN KEY(owner_id) REFERENCES users (id), \n\tCONSTRAINT fk_analyses_source_run_id_runs FOREIGN KEY(source_run_id) REFERENCES askdata.runs (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_analyses_connection_id ON askdata.analyses (connection_id)",
+      "CREATE INDEX ix_analyses_owner_id ON askdata.analyses (owner_id)",
+      "CREATE INDEX ix_askdata_analyses_owner ON askdata.analyses (connection_id, owner_id)"
+    ]
+  },
+  "zones": {
+    "table": "\nCREATE TABLE askdata.zones (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tname VARCHAR(100) NOT NULL, \n\tdescription VARCHAR(300) NOT NULL, \n\ttargets JSONB NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_zones PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_zones_name UNIQUE (connection_id, name), \n\tCONSTRAINT fk_zones_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_zones_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_zones_connection_id ON askdata.zones (connection_id)"
+    ]
+  },
+  "sensitive_fields": {
+    "table": "\nCREATE TABLE askdata.sensitive_fields (\n\tid UUID NOT NULL, \n\tconnection_id UUID NOT NULL, \n\tobject_key VARCHAR(300) NOT NULL, \n\tcategory VARCHAR(20) NOT NULL, \n\tpolicy VARCHAR(12) NOT NULL, \n\tmask_strategy VARCHAR(20) NOT NULL, \n\tmask_argument INTEGER NOT NULL, \n\tsampling VARCHAR(12) NOT NULL, \n\tnote VARCHAR(300) NOT NULL, \n\tenabled BOOLEAN NOT NULL, \n\tupdated_by UUID, \n\tcreated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tupdated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, \n\tdeleted_at TIMESTAMP WITH TIME ZONE, \n\tCONSTRAINT pk_sensitive_fields PRIMARY KEY (id), \n\tCONSTRAINT uq_askdata_sensitive_fields_object UNIQUE (connection_id, object_key), \n\tCONSTRAINT ck_sensitive_fields_ck_askdata_sensitive_fields_category CHECK (category IN ('mobile','id_card','bank_card','email','address','name','amount','credential','other')), \n\tCONSTRAINT ck_sensitive_fields_ck_askdata_sensitive_fields_policy CHECK (policy IN ('mask','exclude')), \n\tCONSTRAINT ck_sensitive_fields_ck_askdata_sensitive_fields_mask CHECK (mask_strategy IN ('keep_prefix','keep_suffix','hash','full')), \n\tCONSTRAINT ck_sensitive_fields_ck_askdata_sensitive_fields_sampling CHECK (sampling IN ('allow','exclude')), \n\tCONSTRAINT fk_sensitive_fields_connection_id_service_databases FOREIGN KEY(connection_id) REFERENCES service_databases (id), \n\tCONSTRAINT fk_sensitive_fields_updated_by_users FOREIGN KEY(updated_by) REFERENCES users (id)\n)\n\n",
+    "indexes": [
+      "CREATE INDEX ix_sensitive_fields_connection_id ON askdata.sensitive_fields (connection_id)"
+    ]
+  }
+}

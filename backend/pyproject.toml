@@ -1,0 +1,60 @@
+[project]
+name = "sentinelops-backend"
+version = "0.1.0"
+description = "Human-approved predictive operations platform backend"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "pydantic-settings>=2.7,<3",
+    "psycopg[binary]>=3.2,<4",
+    "pwdlib[argon2]>=0.2,<1",
+    "PyJWT>=2.10,<3",
+    "sqlalchemy>=2.0,<2.1",
+    "uvicorn[standard]>=0.34,<1",
+    "cryptography>=44,<49",
+    "paramiko>=3.5,<5",
+    "pyyaml>=6,<7",
+    "httpx2>=2.13,<3",
+    "prometheus-client>=0.21,<1",
+    "statsforecast==2.1.1",
+    "numpy>=2,<3",
+    "deepseek-harness-sdk==0.1.5rc1",
+    "fastembed==0.8.1",
+    "pgvector==0.5.0",
+    "mcp==2.2.0",
+    "reportlab>=5.0.1",
+    "python-docx>=1.2.0",
+    "email-validator>=2.3.0",
+    "pymysql[rsa]>=1.2.3,<2",
+    "sqlglot>=27,<31",
+    "auto-ontology-server",
+]
+
+[dependency-groups]
+dev = [
+    "pypdf>=6.19.0",
+    "pytest>=8.3,<10",
+    "ruff>=0.9,<1",
+]
+
+[tool.uv.sources]
+# Upstream fix for the cold caching_sha2_password exchange in 1.2.3 (#1275).
+pymysql = { git = "https://github.com/PyMySQL/PyMySQL.git", rev = "5e4ac551416f77ec974008be27aada29d3bb7808" }
+auto-ontology-server = { workspace = true, editable = true }
+
+[tool.uv.workspace]
+members = [
+    "vendor/auto-ontology",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

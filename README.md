@@ -227,7 +227,7 @@ uv run --project backend python deployment/inspection-sandbox/prepare.py
 
 ### Windows desktop
 
-客户端面向 Windows 10 / 11 x64，后台仍按上述方式独立部署。安装已发布且通过验收的版本后，填写后台**服务根地址**，例如 `https://ops.example.com`，测试连接并登录；地址不附加 `/api/v1`。
+从 [GitHub Releases](https://github.com/kongtou-1/SentinelOps/releases) 下载 Windows x64 安装包或免安装 ZIP。客户端面向 Windows 10 / 11 x64，后台仍按上述方式独立部署。安装后填写后台**服务根地址**，例如 `https://ops.example.com`，测试连接并登录；地址不附加 `/api/v1`。
 
 桌面构建、安装包状态与已知启动问题见[桌面客户端说明](desktop/README.md)。
 

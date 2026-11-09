@@ -6,6 +6,7 @@
   "main": "src/main.mjs",
   "description": "SentinelOps desktop client",
   "author": "SentinelOps",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -33,6 +34,12 @@
       "dist/**",
       "resources/icon.png",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE.SentinelOps.txt"
+      }
     ],
     "win": {
       "icon": "resources/icon.ico",

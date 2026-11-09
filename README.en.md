@@ -227,7 +227,7 @@ Add `-LocalCollectors` for local collectors, `-MailTest` for Mailpit, or `-Local
 
 ### Windows desktop
 
-The client targets Windows 10 / 11 x64 and requires a separately deployed server. Install a published, validated build, enter the server's **root URL**, such as `https://ops.example.com`, test the connection, and sign in. Do not append `/api/v1`.
+Download the Windows x64 installer or standalone ZIP from [GitHub Releases](https://github.com/kongtou-1/SentinelOps/releases). The client targets Windows 10 / 11 x64 and requires a separately deployed server. Enter the server's **root URL**, such as `https://ops.example.com`, test the connection, and sign in. Do not append `/api/v1`.
 
 See the [desktop guide](desktop/README.md) for builds, installer status, and known startup issues.
 

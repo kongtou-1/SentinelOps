@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import time
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -31,6 +32,7 @@ from app.services import askdata_runs as conversations
 logger = logging.getLogger(__name__)
 
 DEFAULT_BUDGET_SECONDS = 180
+MAX_SQL_RECONSTRUCTIONS = 3
 CHINESE_ANSWER_RULE = (
     "请使用简体中文回答，用 2 到 4 句话直接说明结论；"
     "不要复述推理过程，不要输出内部思考，不要编造 SQL 之外的数值。"
@@ -94,6 +96,7 @@ def _load(identifier):
             "version_id": version_id,
             "user_id": user.id,
             "context": context,
+            "requested_at": row.created_at,
         }
 
 
@@ -143,7 +146,7 @@ def _payload(state, history, connector, data_retriever, semantic_retriever, code
         "connectors": [connector],
         "data_retriever": data_retriever,
         "semantic_retriever": semantic_retriever,
-        "custom_prompts": CHINESE_ANSWER_RULE,
+        "custom_prompts": CHINESE_ANSWER_RULE + "\n" + _time_context(state),
         "acronyms": [
             *list(code_context.get("domain_rules") or []),
             *list(business["acronyms"]),
@@ -157,6 +160,21 @@ def _payload(state, history, connector, data_retriever, semantic_retriever, code
         "skip_evidence_refinement": False,
         "prediction": False,
     }
+
+
+def _time_context(state):
+    requested_at = state.get("requested_at") or datetime.now(UTC)
+    local = requested_at.astimezone(timezone(timedelta(hours=8)))
+    start = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return (
+        f"本次提问时间：{local.isoformat()}；业务时区 Asia/Shanghai（UTC+08:00）。"
+        f"‘今天’为 {start.isoformat()}（含）至 {end.isoformat()}（不含）；"
+        f"数据库会话使用 UTC，对应边界为 {start.astimezone(UTC).isoformat()} "
+        f"至 {end.astimezone(UTC).isoformat()}。不要用数据库的 UTC CURRENT_DATE 代替本地日期。"
+        "只能使用授权目录中的表和字段；缺少字段时明确说明缺口，不编造字段或用常量替代。"
+        "Token 统计中的 NULL 表示未知，不能默认当作零。"
+    )
 
 
 def _guard(user_id, connection_id, version_id, writing):
@@ -186,13 +204,11 @@ def _chart(columns, rows) -> AskDataChartSpec:
     numeric = [column.name for column in columns if column.kind in ("integer", "decimal")]
     if not numeric:
         return AskDataChartSpec()
-    categorical = [
-        column for column in columns if column.kind in ("text", "date", "datetime")
-    ]
-    x = categorical[0].name if categorical else columns[0].name
-    temporal = any(
-        column.name == x and column.kind in ("date", "datetime") for column in columns
-    )
+    categorical = [column for column in columns if column.kind in ("text", "date", "datetime")]
+    if not categorical:
+        return AskDataChartSpec()
+    x = categorical[0].name
+    temporal = any(column.name == x and column.kind in ("date", "datetime") for column in columns)
     return AskDataChartSpec(
         kind="line" if temporal else "bar",
         x=x,
@@ -211,9 +227,9 @@ def _evidence(db, version_id, sql):
         )
     ).all()
     lowered = sql.lower()
-    matched = [
-        row for row in definitions if row.object_key and row.object_key.lower() in lowered
-    ][:10]
+    matched = [row for row in definitions if row.object_key and row.object_key.lower() in lowered][
+        :10
+    ]
     items = [
         AskDataEvidence(
             kind=row.object_kind,
@@ -227,8 +243,7 @@ def _evidence(db, version_id, sql):
     # with snapshot / commit / path / line provenance for the answer view.
     try:
         code_items = [
-            AskDataEvidence(**item)
-            for item in code_rules.evidence_rules(db, version_id, sql)
+            AskDataEvidence(**item) for item in code_rules.evidence_rules(db, version_id, sql)
         ]
     except Exception:
         logger.exception("Code-rule evidence lookup failed (version=%s)", version_id)
@@ -266,14 +281,9 @@ def _result(identifier, state, answer, connector):
         code = str(exc.args[0]) if exc.args else "query_execution_failed"
         raise RunFailure(code) from exc
 
-    columns = [
-        AskDataColumnMeta.model_validate(item)
-        for item in (raw.get("column_types") or [])
-    ]
+    columns = [AskDataColumnMeta.model_validate(item) for item in (raw.get("column_types") or [])]
     if not columns:
-        columns = [
-            AskDataColumnMeta(name=name, kind="text") for name in raw.get("columns", [])
-        ]
+        columns = [AskDataColumnMeta(name=name, kind="text") for name in raw.get("columns", [])]
     rows = raw.get("rows", [])
     with SessionLocal() as db:
         # Masking happens before persistence so answer, table, chart and CSV
@@ -283,7 +293,12 @@ def _result(identifier, state, answer, connector):
         if state.get("connection_id"):
             rows = askdata_settings.mask_result(db, state["connection_id"], columns, rows)
         evidence, certification = _evidence(db, state["version_id"], sql)
-    if not re.search(r"[\u4e00-\u9fff]", text):
+    scalar_summary = (
+        len(rows) == 1
+        and columns
+        and all(column.kind in ("integer", "decimal") for column in columns)
+    )
+    if scalar_summary or not re.search(r"[\u4e00-\u9fff]", text):
         # Upstream can return an English SQL explanation without result values.
         # Render the final, masked rows directly instead of translating a draft.
         text = _chinese_result_summary(columns, rows, bool(raw.get("truncated")))
@@ -307,11 +322,20 @@ def _chinese_result_summary(columns, rows, truncated=False):
     if not rows:
         return "查询完成，没有符合条件的记录。"
     prefix = f"查询返回{'至少 ' if truncated else ' '}{len(rows)} 行。"
+    labels = {
+        "calls": "调用次数",
+        "total_calls": "调用次数",
+        "input_tokens": "输入 Token",
+        "total_input_tokens": "输入 Token",
+        "output_tokens": "输出 Token",
+        "total_output_tokens": "输出 Token",
+    }
     samples = []
     for row in rows[:3]:
         samples.append(
             "，".join(
-                f"{column.name}：{'未设置' if value is None else str(value)[:100]}"
+                f"{labels.get(column.name.lower(), column.name)}："
+                f"{'未设置' if value is None else str(value)[:100]}"
                 for column, value in zip(columns[:6], row[:6], strict=False)
             )
         )
@@ -325,6 +349,7 @@ def _events(identifier, stream_fn, payload, deadline):
     answer = None
     generated_sql = ""
     failure = None
+    reconstructions = 0
     for event in stream_fn(payload):
         if time.monotonic() > deadline:
             raise RunFailure("query_budget_exceeded")
@@ -334,6 +359,16 @@ def _events(identifier, stream_fn, payload, deadline):
         if kind == "step":
             node = str(event.get("node") or "")
             phase = event.get("phase")
+            if node == "reconstruct_sql" and phase == "start":
+                reconstructions += 1
+                if reconstructions > MAX_SQL_RECONSTRUCTIONS:
+                    return {
+                        "response": (
+                            f"在当前授权数据和业务口径下，SQL 已修正 {MAX_SQL_RECONSTRUCTIONS} 次"
+                            "仍未通过校验，已停止重试。请补充所需字段授权或明确统计口径后重试。"
+                        ),
+                        "sql_code": "",
+                    }
             status = "running" if phase == "start" else "completed"
             summary = conversations.label(node)
             if status == "running":
@@ -404,9 +439,7 @@ def run(identifier, *, stream_fn=None):
             version_id,
             lambda writing: _guard(user_id, connection_id, version_id, writing),
         )
-        connector = settings.database_connector(
-            user_id, connection_id, version_id, gate="askdata"
-        )
+        connector = settings.database_connector(user_id, connection_id, version_id, gate="askdata")
         from app.services import askdata_settings
 
         with SessionLocal() as db:

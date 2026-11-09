@@ -6,6 +6,20 @@ SENSITIVE = re.compile(
     r"password|passphrase|secret|api.?key|authorization|token|private.?key", re.I
 )
 
+# Usage counters are not authentication tokens. Database reads still require
+# native numeric values before preserving these otherwise-sensitive names.
+TOKEN_COUNT_FIELDS = frozenset(
+    {
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+    }
+)
+
 
 def redact(value):
     if isinstance(value, dict):

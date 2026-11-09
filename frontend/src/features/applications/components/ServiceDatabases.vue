@@ -6,6 +6,16 @@ import { all, api, type Models } from "@/api/client";
 import { useAuth } from "@/features/auth/store";
 import { date, label } from "@/utils/display";
 
+const tokenCountFields = new Set([
+  "input_tokens",
+  "output_tokens",
+  "total_tokens",
+  "prompt_tokens",
+  "completion_tokens",
+  "total_input_tokens",
+  "total_output_tokens",
+]);
+
 const props = defineProps<{
   applicationId?: string;
   summary?: boolean;
@@ -615,9 +625,9 @@ defineExpose({ refresh: load, create: () => edit() });
                   :disabled="
                     !canManage ||
                     busy ||
-                    /password|passphrase|secret|api.?key|authorization|token|private.?key/i.test(
+                    (/password|passphrase|secret|api.?key|authorization|token|private.?key/i.test(
                       column.name,
-                    )
+                    ) && !tokenCountFields.has(column.name.toLowerCase()))
                   "
                   >{{ column.name }}</el-checkbox
                 ></el-checkbox-group

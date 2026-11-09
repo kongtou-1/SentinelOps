@@ -7,13 +7,14 @@ import tempfile
 import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import psycopg
 import pymysql
 
 from app.core.secrets import cipher
-from app.utils.redaction import redact
+from app.utils.redaction import TOKEN_COUNT_FIELDS, redact
 
 MAX_BYTES = 128 * 1024
 
@@ -427,6 +428,12 @@ def query(connection, sql, include_types=False):
                 result["truncated"] = True
             cells = [str(v)[:4096] if v is not None else None for v in values]
             safe = redact(dict(zip(columns, cells, strict=True)))
+            for column, value, cell in zip(columns, values, cells, strict=True):
+                if column.lower() in TOKEN_COUNT_FIELDS and (
+                    value is None
+                    or (isinstance(value, (int, float, Decimal)) and not isinstance(value, bool))
+                ):
+                    safe[column] = cell
             cells = [safe[c] for c in columns]
             size += len(json.dumps(cells, ensure_ascii=False).encode())
             if size > MAX_BYTES - 4096:

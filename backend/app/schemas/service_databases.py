@@ -5,7 +5,7 @@ from pydantic import AwareDatetime, Field, SecretStr, model_validator
 
 from app.schemas.auth import RequestModel
 from app.schemas.resources import ORMResponse
-from app.utils.redaction import SENSITIVE
+from app.utils.redaction import SENSITIVE, TOKEN_COUNT_FIELDS
 
 
 class DatabaseInput(RequestModel):
@@ -35,7 +35,12 @@ class DatabaseInput(RequestModel):
             if (
                 not columns
                 or len(columns) > 200
-                or any(not col or len(col) > 128 or SENSITIVE.search(col) for col in columns)
+                or any(
+                    not col
+                    or len(col) > 128
+                    or (SENSITIVE.search(col) and col.lower() not in TOKEN_COUNT_FIELDS)
+                    for col in columns
+                )
             ):
                 raise ValueError("Select explicit non-secret columns")
         if any(len(k) > 260 or len(v) > 8000 for k, v in self.table_notes.items()):

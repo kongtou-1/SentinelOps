@@ -46,3 +46,9 @@
 - 除上述一处外，阶段 7 未修改上游源码。构建写入的可见性问题在平台侧修复（见下条），不属于上游缺陷。
 - 平台 `app/repositories/ontology.py`：`OntologyStore` 支持 `commit` 回调与多行 INSERT（`insert(t).values([...])`，逐行注入 `model_version_id`），不再以 `ontology_single_insert_required` 拒绝批量子句；平台 `app/integrations/askdata_semantic.py` 的 `BuildStorage` 在未开启显式事务时逐语句提交，符合上游 `store_factory()`「返回活动事务或 autocommit 句柄」的契约。原因是上游目录写入把表放在调用线程、列放在线程池，未提交的表行对写列的连接不可见，复合外键 `fk_catalog_column_table_id_catalog_table` 直接失败；语义编译仍包在 `transaction()` 内，保持全有或全无。
 - `auto_ontology/retrieval/text_to_sql/agents/candidates_retrieval.py`、`candidates_preparation.py`：线程池由标准库 `ThreadPoolExecutor` 换成 `auto_ontology.host.ContextThreadPoolExecutor`（仅改导入）。原因是检索侧在池内并发做向量检索与候选准备，而平台把版本、存储与模型工厂放进 ContextVar 任务绑定；标准库线程池不复制上下文，池内 `require()` 直接抛 `Auto-Ontology requires an authorized platform task`，异常被上层吞掉后候选表为空，模型只能凭空编表名（实测出现 `public.orders`），问数在「校验筛选值→修正 SQL」之间反复重试直到预算耗尽。构建侧 `catalog/services/schema.py` 原本就用上下文线程池，故构建未暴露该问题。
+
+## 2026-11-09 连接标识引用修复
+
+- `retrieval/text_to_sql/agents/sql_value_validation.py`、`sql_parse_validation.py`：解析前调用连接器可选的 `normalize_sql` 方法。未提供该方法的连接器保持原行为；目录解析、意图校验及执行权限检查全部保留。
+- 平台 `app/integrations/askdata_database.py`：目录以连接 UUID 区分同名数据库。模型偶尔生成 `UUID.public.table` 而非 `"UUID".public.table`，SQL 解析在连字符处失败，连续重建仍复制相同错误。平台按 SQL tokenizer 的位置仅为当前连接的裸路由标识补引号，不改写字符串、注释或其他连接标识。最终执行仍仅移除当前连接的逻辑前缀，再通过原表／列白名单与只读 gate。
+- 回归包含 PostgreSQL／MySQL、CTE／JOIN、重复规范化、字符串及注释保护、其他连接拒绝、未授权列拒绝，以及值校验和目录校验入口。该修复不更名连接或语义目录，不要求重建已有模型。

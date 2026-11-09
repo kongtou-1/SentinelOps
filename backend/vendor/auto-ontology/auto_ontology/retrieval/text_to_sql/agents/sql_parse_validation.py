@@ -800,6 +800,13 @@ class SQLValidationAgent(BaseAgent):
         schemas = get_schemas_by_ids(schemas_ids)
         degenerate_dialect = getattr(connector, "dialect", None)
 
+        # Platform catalogs can use a logical routing ID that requires quoting.
+        # Normalize before parsing, while retaining every catalog/intent gate.
+        normalize_sql = getattr(connector, "normalize_sql", None)
+        if normalize_sql is not None:
+            response.sql_code = normalize_sql(response.sql_code)
+            path_state["sql_generation_result"] = response
+
         # Every constructed/reconstructed SQL passes through this node before
         # execution (see the graph: construct_sql_from_candidates,
         # construct_sql_not_from_snippets, and reconstruct_sql all route

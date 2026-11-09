@@ -591,10 +591,16 @@ class SQLValueValidationAgent(BaseAgent):
 
         tables = list(path_state.get("relevant_tables") or [])
         connector = resolve_connector_from_tables(tables, state.get("connectors") or [])
+        normalize_sql = getattr(connector, "normalize_sql", None)
+        normalized = normalize_sql(sql_code) if normalize_sql is not None else sql_code
+        normalization_changed = normalized != sql_code
+        if normalization_changed:
+            sql_code = normalized
+            _set_sql_code(path_state, sql_code)
         dialect = getattr(connector, "dialect", None)
         checks = extract_value_checks(sql_code, dialect)
         if not checks:
-            return {}
+            return {"path_state": path_state} if normalization_changed else {}
 
         evidence = state.get("evidence") or ""
         cache = dict(state.get("sql_value_validation_cache") or {})
@@ -677,6 +683,8 @@ class SQLValueValidationAgent(BaseAgent):
 
         cache["queries"] = query_cache
         updates: dict[str, Any] = {"sql_value_validation_cache": cache}
+        if normalization_changed:
+            updates["path_state"] = path_state
         if action is None or action.action != ValueValidationActionType.FINISH:
             return updates
 

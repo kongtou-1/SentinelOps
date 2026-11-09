@@ -73,6 +73,35 @@ class PlatformDatabase(SQLDatabase):
             raise ValueError("empty_sql")
         return self._executor(self._local_sql(sql, self._loader()))
 
+    def normalize_sql(self, sql):
+        """Quote this connector's bare routing ID before any SQL parser runs.
+
+        The catalog uses a UUID to distinguish connections. Models sometimes
+        copy it unquoted into database.schema.table. Token positions let us
+        repair that exact identifier without touching literals or comments.
+        """
+        import sqlglot
+
+        name = self.database_name
+        dialect = sqlglot.Dialect.get_or_raise(self.dialect)
+        try:
+            tokens = dialect.tokenize(sql)
+        except sqlglot.errors.TokenError:
+            return sql
+        quoted = sqlglot.exp.to_identifier(name, quoted=True).sql(dialect=self.dialect)
+        positions = []
+        for token in tokens:
+            start = token.start
+            end = start + len(name)
+            if not sql.startswith(name, start) or not sql[end:].lstrip().startswith("."):
+                continue
+            if start and (sql[start - 1].isalnum() or sql[start - 1] in '_-"`'):
+                continue
+            positions.append((start, end))
+        for start, end in reversed(positions):
+            sql = sql[:start] + quoted + sql[end:]
+        return sql
+
     def _local_sql(self, sql, snapshot):
         """Remove only this connector's logical routing prefix before SQL gating."""
         import sqlglot
@@ -81,6 +110,7 @@ class PlatformDatabase(SQLDatabase):
 
         dialect = "postgres" if snapshot["engine"] == "postgresql" else "mysql"
         try:
+            sql = self.normalize_sql(sql)
             statements = sqlglot.parse(sql, read=dialect)
         except ParseError:
             return sql  # The platform gate owns rejection and stable error codes.
